@@ -1,6 +1,7 @@
 import os
 import glob
 from utils.logger import logger
+from utils.stemmer import stem_text
 from modules.librarian import Librarian
 from modules.oracle import Oracle
 
@@ -61,7 +62,14 @@ class Ingestor:
             chunks = self._chunk_content(content)
             file_meta = {"source": file_path, "filename": os.path.basename(file_path)}
             
-            # 1. Spremi u arhivu (JSONL)
+            # 1. Pripremi FTS (očisti stare zapise)
+            self.librarian.delete_fts(file_path)
+
+            for chunk in chunks:
+                stemmed_chunk = stem_text(chunk, mode="aggressive")
+                self.librarian.store_fts(file_path, chunk, stemmed_chunk)
+            
+            # 2. Spremi u arhivu (JSONL)
             self.librarian.store_archive(chunks, file_meta)
             
             # 2. Spremi u vektorsku bazu (ChromaDB)

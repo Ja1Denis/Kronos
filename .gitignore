@@ -9,3 +9,6 @@ chroma/
 *.db
 .ai/
 logs/
+data/store/
+data/archive.jsonl
+data/metadata.db
