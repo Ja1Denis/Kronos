@@ -1,0 +1,117 @@
+import os
+import glob
+from utils.logger import logger
+from modules.librarian import Librarian
+from modules.oracle import Oracle
+
+class Ingestor:
+    def __init__(self, chunk_size=1000, db_path="data"):
+        self.chunk_size = chunk_size
+        self.librarian = Librarian(db_path)
+        self.oracle = Oracle(os.path.join(db_path, "store"))
+        
+        if not os.path.exists(os.path.join(db_path, "archive.jsonl")):
+            logger.warning("🚧 Kreiram novu arhivu...")
+
+    def run(self, path, recursive=False):
+        """
+        Glavna metoda za pokretanje ingestije.
+        """
+        logger.info(f"Pokrećem Ingestora na: {path}")
+        
+        files = self._scan_files(path, recursive)
+        logger.info(f"Pronađeno {len(files)} datoteka.")
+
+        processed_count = 0
+        for file_path in files:
+            self._process_file(file_path)
+            processed_count += 1
+            
+        
+        logger.success(f"Završeno! Obrađeno {processed_count} datoteka.")
+
+    def _scan_files(self, path, recursive):
+        """
+        Pronalazi sve .md i .txt datoteke.
+        """
+        files = []
+        full_path = os.path.abspath(path)
+
+        if os.path.isfile(full_path):
+            return [full_path]
+
+        pattern = "**/*.md" if recursive else "*.md"
+        # Tražimo markdown datoteke
+        md_files = glob.glob(os.path.join(full_path, pattern), recursive=recursive)
+        files.extend(md_files)
+        
+        return files
+    
+    def _process_file(self, file_path):
+        """
+        Čita datoteku, dijeli je na chunkove i sprema.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            if not content.strip():
+                return
+                
+            chunks = self._chunk_content(content)
+            file_meta = {"source": file_path, "filename": os.path.basename(file_path)}
+            
+            # 1. Spremi u arhivu (JSONL)
+            self.librarian.store_archive(chunks, file_meta)
+            
+            # 2. Spremi u vektorsku bazu (ChromaDB)
+            ids = [f"{os.path.basename(file_path)}_{i}" for i in range(len(chunks))]
+            metadatas = [file_meta for _ in chunks]
+            
+            self.oracle.collection.upsert(
+                documents=chunks,
+                metadatas=metadatas,
+                ids=ids
+            )
+            logger.success(f"Vektorizirano: {os.path.basename(file_path)} ({len(chunks)} chunks)")
+            
+        except Exception as e:
+            logger.error(f"Greška pri čitanju {file_path}: {e}")
+
+    def _chunk_content(self, text):
+        """
+        Pametniji chunking baziran na Markdown zaglavljima (#).
+        Pokušava zadržati kontekst zaglavlja.
+        """
+        chunks = []
+        import re
+        
+        # Razdvajamo po zaglavljima (npr. # Naslov)
+        # Ovo je jednostavna implementacija, LangChain ima bolju.
+        parts = re.split(r'(^#+\s.*$)', text, flags=re.MULTILINE)
+        
+        current_chunk = ""
+        
+        for part in parts:
+            if not part.strip():
+                continue
+                
+            # Ako je zaglavlje, započni novi chunk ako je stari prevelik
+            if re.match(r'^#+\s', part):
+                if len(current_chunk) > self.chunk_size:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = part
+                else:
+                    current_chunk += "\n" + part
+            else:
+                # Običan tekst
+                if len(current_chunk) + len(part) > self.chunk_size:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = part
+                else:
+                    current_chunk += "\n" + part
+                    
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+            
+        return chunks

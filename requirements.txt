@@ -1,0 +1,8 @@
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+sqlite-utils
+langchain
+colorama
+tqdm
+python-dotenv
+openai
