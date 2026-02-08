@@ -45,3 +45,25 @@ Cilj: Implementirati "Kronoraising" arhitekturu.
     - [x] Dodati REST endpointe (/ingest, /query, /stats).
     - [x] Omogućiti JSON output za AI agente.
     - [x] Implementirati File Watcher za automatsko reindeksiranje.
+
+- [x] **T009: Project Awareness & Chat** <!-- id: 8 -->
+    - [x] Implementirati `project` tagiranje u bazi podataka.
+    - [x] Migrirati postojeće podatke.
+    - [x] Dodati interaktivni `chat` mod u CLI.
+    - [x] Implementirati pametno filtriranje po projektima.
+
+## 🚀 Faza 3: "God Mode" (Advanced Features)
+Cilj: Pretvoriti Kronosa u aktivnog sugovornika i alat za upravljanje znanjem.
+
+- [ ] **T010: Temporal Truth (Vrijeme i Odluke)** <!-- id: 9 -->
+    - [ ] Proširiti shemu za `valid_from`, `valid_to`, `superseded_by`.
+    - [ ] Implementirati logiku za detekciju kontradikcija.
+    - [ ] API za "ratifikaciju" odluka.
+
+- [ ] **T011: Robustness & Safety** <!-- id: 10 -->
+    - [ ] Implementirati **Debounce** za watcher.
+    - [ ] Dodati **Backup** komandu (`kronos backup`).
+
+- [ ] **T012: Connectivity (MCP)** <!-- id: 11 -->
+    - [ ] Implementirati **Model Context Protocol (MCP)** server.
+    - [ ] Omogućiti korištenje Kronosa kao alata u Claude/Gemini desktop aplikacijama.
