@@ -129,10 +129,10 @@ Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za gen
     - [x] Integrirati u `Oracle` za top rezultate.
     - [x] Koristiti file-reading metodu umjesto reindeksiranja (efikasnije).
 
-- [ ] **T022: Query Expansion & Multi-Search** <!-- id: 21 -->
-    - [ ] Koristiti LLM za generiranje 3-5 varijacija korisničkog upita.
-    - [ ] Izvršiti paralelne pretrage za svaku varijaciju.
-    - [ ] Implementirati **Reciprocal Rank Fusion (RRF)** za spajanje rezultata.
+- [x] **T022: Query Expansion & Multi-Search** <!-- id: 21 -->
+    - [x] Nadograditi `Hypothesizer` s metodom `expand_query`.
+    - [x] Ažurirati `Oracle.ask` za multi-query retrieval.
+    - [x] Implementirati RRF (Reciprocal Rank Fusion) za spajanje rezultata.
 
 - [ ] **T023: Semantic Clustering & Auto-Tagging** <!-- id: 22 -->
     - [ ] Automatsko grupiranje sličnih chunkova (Topic Modeling).

@@ -2,7 +2,15 @@
 Datum: 2026-02-08
 
 ## 🚀 Status: Faza 5 U Tijeku (Symbiosis)
-Projekt je uspješno završio Fazu 4 (Evolution) i sada ulazi u **Fazu 5 (Symbiosis)**. Fokus je na **generativnoj inteligenciji** i dubljem semantičkom razumijevanju.
+Projekt je sada duboko u **Fazi 5 (Symbiosis)** s fokusom na generativnu inteligenciju i napredno semantičko razumijevanje.
+
+### 08.02.2026. - Implementacija Kognitivnih Sposobnosti (Faza 5)
+- **HyDE (Hypothetical Document Embeddings)**: Implementiran `Hypothesizer` koji koristi Gemini-2.5-flash za pretvaranje upita u hipotetske dokumente prije pretraživanja (+Persistent Cache).
+- **Contextual Retrieval**: Dodan `Contextualizer` modul za "Small-to-Big" dohvaćanje sadržaja (čitanje +/- 300 znakova oko chunka iz izvorne datoteke).
+- **Query Expansion**: Implementiran mehanizam za generiranje varijacija upita i RRF (Reciprocal Rank Fusion) za spajanje rezultata.
+- **Benchmark**: Prosječni Recall@5 podignut na **72.5%** (prije 70.5%) uz minimalni utjecaj na latenciju (~376ms).
+
+### 04.02.2026. - Početak Faze 5 (Symbiosis)
 
 ### 💎 Postignuća Faze 4 (Završeno):
 - **Event Sourcing**: Potpuni integritet podataka kroz `archive.jsonl`.
@@ -12,9 +20,9 @@ Projekt je uspješno završio Fazu 4 (Evolution) i sada ulazi u **Fazu 5 (Symbio
 - **Benchmark Suite**: Sustav za mjerenje točnosti (70.5% Recall@5).
 
 ### 🚧 Trenutni Fokus (Faza 5):
-- **HyDE implementacija**: Korištenje LLM-a za generiranje hipotetskih odgovora radi boljeg vector matcha.
-- **Contextual Retrieval**: Povezivanje malih chunkova s njihovim širim kontekstom ("Small-to-Big" pristup).
-- **Query Expansion**: Automatsko generiranje varijacija upita za pokrivanje različitih terminologija.
+- **Semantic Clustering**: Automatsko grupiranje sličnih tema.
+- **Knowledge Graph**: Povezivanje entiteta u graf.
+- **Deep Research**: Mogućnost generiranja složenih izvještaja.
 
 ### 📊 Statistika Baze:
 - **Indeksirano datoteka**: ~2400 (uključujući testne projekte)
@@ -23,4 +31,4 @@ Projekt je uspješno završio Fazu 4 (Evolution) i sada ulazi u **Fazu 5 (Symbio
 
 ### 🛠️ Tehnički Dug / Napomene:
 - Riješen problem s prikazom `rich` panela na Windows CLI-u (prelazak na `print` za stabilnost).
-- Potrebno implementirati caching za skupe LLM pozive (HyDE).
+

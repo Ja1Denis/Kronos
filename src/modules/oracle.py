@@ -32,99 +32,105 @@ class Oracle:
             print(f"Warning: Ne mogu učitati Contextualizer: {e}")
             self.contextualizer = None
 
-    def ask(self, query, project=None, limit=5, silent=False, hyde=False):
-        """
-        Postavlja pitanje Kronosu koristeći 3-stage pipeline:
-        1. Retrieval (Vector + Keyword)
-        2. Merging & Deduplication
-        3. Reranking (Scoring)
-        """
+    def _retrieve_candidates(self, query, project, limit, hyde, silent):
+        """Helper metoda koja vraća sirove kandidate (Vector + FTS)."""
         from src.utils.stemmer import stem_text
         stemmed_query = stem_text(query, mode="aggressive")
-        
-        if not silent:
-            project_info = f" na projektu [bold cyan]{project}[/]" if project else ""
-            print(f"{Fore.MAGENTA}🔮 Kronos razmatra{project_info}: '{query}'{Style.RESET_ALL}")
 
-        # STAGE 0: Entity Search (Prioritet)
-        entities = self.librarian.search_entities(query, project=project, limit=limit)
-
-        # STAGE 1: Broad Retrieval
-        # a) Vector
+        # HyDE
         vector_query = query
         if hyde and self.hypothesizer:
-            if not silent:
-                 print(f"{Fore.CYAN}💭 Generiram HyDE hipotezu...{Style.RESET_ALL}")
+            if not silent: print(f"{Fore.CYAN}💭 HyDE: Generiram hipotezu za '{query}'...{Style.RESET_ALL}")
             vector_query = self.hypothesizer.generate_hypothesis(query)
-            if not silent:
-                 print(f"{Fore.DIM}Hipoteza: {vector_query[:100]}...{Style.RESET_ALL}")
-
+            # if not silent: print(f"{Fore.DIM}Hipoteza: {vector_query[:100]}...{Style.RESET_ALL}")
+        
+        # Vector
         where_filter = {"project": project} if project else None
         vector_candidates = self.collection.query(
             query_texts=[vector_query],
-            n_results=limit * 2, # Uzmi više kandidata za reranking
+            n_results=limit * 2,
             where=where_filter
         )
         
-        # b) Keyword
+        # FTS
         fts_candidates = self.librarian.search_fts(stemmed_query, project=project, limit=limit * 2)
-
-        # STAGE 2: Merging & Deduplication
-        all_chunks = []
-        seen_contents = set()
-
-        # Dodaj vektorske kandidate
+        
+        candidates = []
         if vector_candidates['documents']:
             for doc, meta, dist in zip(vector_candidates['documents'][0], vector_candidates['metadatas'][0], vector_candidates['distances'][0]):
-                if doc not in seen_contents:
-                    score = 1 - dist
-                    all_chunks.append({
-                        "content": doc,
-                        "metadata": meta,
-                        "v_score": score,
-                        "k_score": 0,
-                        "method": "Vector"
-                    })
-                    seen_contents.add(doc)
-
-        # Dodaj i poveži FTS kandidate
+                 candidates.append({
+                     "content": doc,
+                     "metadata": meta,
+                     "score": (1 - dist),
+                     "method": "Vector"
+                 })
+                 
         for path, content in fts_candidates:
-            if content in seen_contents:
-                # Već imamo iz vektora, povečaj mu k_score
-                for chunk in all_chunks:
-                    if chunk["content"] == content:
-                        chunk["k_score"] = 1.0 # Jednostavan boosting
-                        chunk["method"] = "Hybrid 🧩"
-                        break
-            else:
-                all_chunks.append({
-                    "content": content,
-                    "metadata": {"source": path},
-                    "v_score": 0,
-                    "k_score": 1.0,
-                    "method": "Keyword"
-                })
-                seen_contents.add(content)
+             candidates.append({
+                 "content": content,
+                 "metadata": {"source": path},
+                 "score": 0.5, # Base FTS score
+                 "method": "Keyword"
+             })
+             
+        return candidates
 
-        # STAGE 3: Simple Reranking (Scoring)
-        # Finalni score = vector_score + keyword_boost
-        for chunk in all_chunks:
-            chunk["final_score"] = chunk["v_score"] + (chunk["k_score"] * 0.3)
+    def ask(self, query, project=None, limit=5, silent=False, hyde=False, expand=False):
+        """
+        Postavlja pitanje Kronosu koristeći napredni pipeline:
+        1. Query Expansion (opcionalno)
+        2. Multi-Retrieval (HyDE, Vector, FTS)
+        3. RRF Fusion & Deduplication
+        4. Contextual Expansion
+        """
+        
+        # 1. Query Expansion
+        queries = [query]
+        if expand and self.hypothesizer:
+            if not silent: print(f"{Fore.MAGENTA}✨ Proširujem upit (Query Expansion)...{Style.RESET_ALL}")
+            variations = self.hypothesizer.expand_query(query)
+            queries = variations # ovo uključuje i original
+            if not silent:
+                for v in queries[1:]: print(f"  - {v}")
+        elif not silent:
+             project_info = f" na projektu [bold cyan]{project}[/]" if project else ""
+             print(f"{Fore.MAGENTA}🔮 Kronos razmatra{project_info}: '{query}'{Style.RESET_ALL}")
 
-        # Sortiraj po finalnom scoru
-        all_chunks.sort(key=lambda x: x["final_score"], reverse=True)
+        # 2. Retrieval Loop (Merge & Rank)
+        merged_chunks = {}
+        
+        for q in queries:
+            # Silent za sub-upite da ne spamamo konzolu, osim ako je expansion uključen pa želimo vidjeti progress?
+            sub_silent = True 
+            candidates = self._retrieve_candidates(q, project, limit, hyde, sub_silent)
+            
+            for c in candidates:
+                content = c["content"]
+                if content in merged_chunks:
+                    # Boost postojećeg (RRF-ish)
+                    merged_chunks[content]["score"] += c["score"]
+                    if c["method"] not in merged_chunks[content]["method"]:
+                         merged_chunks[content]["method"] += f", {c['method']}"
+                else:
+                    merged_chunks[content] = c
 
-        # Contextual Expansion za top rezultate (Samo ako imamo Contextualizer)
+        all_chunks = list(merged_chunks.values())
+        
+        # Rerank
+        all_chunks.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Contextual Expansion za top rezultate
         final_chunks = all_chunks[:limit]
         if self.contextualizer:
             for chunk in final_chunks:
                 source = chunk['metadata'].get('source')
                 if source:
-                    # Proširi kontekst (npr. +/- 300 znakova)
-                    extended = self.contextualizer.expand_context(chunk['content'], source, context_window=300)
-                    chunk['expanded_content'] = extended
+                    chunk['expanded_content'] = self.contextualizer.expand_context(chunk['content'], source, context_window=300)
                 else:
                     chunk['expanded_content'] = chunk['content']
+
+        # Entity Search (samo jednom, na originalni upit)
+        entities = self.librarian.search_entities(query, project=project, limit=limit)
 
         return {
             "entities": [
@@ -138,10 +144,10 @@ class Oracle:
             ],
             "chunks": [
                 {
-                    "content": c.get("expanded_content", c["content"]), # Vrati prošireni sadržaj ako postoji
+                    "content": c.get("expanded_content", c["content"]),
                     "original_content": c["content"],
                     "metadata": c["metadata"],
-                    "score": c["final_score"],
+                    "score": c["score"],
                     "method": c["method"]
                 } for c in final_chunks
             ]

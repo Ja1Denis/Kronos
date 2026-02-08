@@ -63,7 +63,8 @@ def ask(
     query: str = typer.Argument(..., help="Tvoje pitanje za Kronosa"),
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Filtriraj po imenu projekta"),
     limit: int = typer.Option(5, "--limit", "-n", help="Broj rezultata"),
-    hyde: bool = typer.Option(False, "--hyde", help="Koristi hipotetsku pretragu (HyDE)")
+    hyde: bool = typer.Option(False, "--hyde", help="Koristi hipotetsku pretragu (HyDE)"),
+    expand: bool = typer.Option(False, "--expand", "-e", help="Koristi proširenje upita (Expansion)")
 ):
     """
     Postavlja pitanje Kronosu i pretražuje memoriju.
@@ -71,7 +72,7 @@ def ask(
     oracle = Oracle()
     
     # with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-    results = oracle.ask(query, project=project, limit=limit, silent=True, hyde=hyde)
+    results = oracle.ask(query, project=project, limit=limit, silent=True, hyde=hyde, expand=expand)
 
     if not results["entities"] and not results["chunks"]:
         console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
@@ -160,7 +161,8 @@ def watch(
 
 @app.command()
 def chat(
-    hyde: bool = typer.Option(False, "--hyde", help="Koristi HyDE mode u ovom sessionu")
+    hyde: bool = typer.Option(False, "--hyde", help="Koristi HyDE mode u ovom sessionu"),
+    expand: bool = typer.Option(False, "--expand", "-e", help="Koristi Expansion mode")
 ):
     """
     Pokreće interaktivni razgovor s Kronosom.
@@ -194,11 +196,11 @@ def chat(
                 pass # Ako ne možemo dohvatiti projekte, nastavi bez toga
             
             # Prvi pokušaj (s projektom ako je detektiran)
-            results = oracle.ask(query, project=target_project, limit=3, silent=True, hyde=hyde)
+            results = oracle.ask(query, project=target_project, limit=3, silent=True, hyde=hyde, expand=expand)
             
             # FALLBACK: Ako nema rezultata, pokušaj bez filtera projekta
             if not results["entities"] and not results["chunks"] and target_project:
-                results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde)
+                results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde, expand=expand)
                 target_project = None # Resetiraj za prikaz
 
         if not results["entities"] and not results["chunks"]:
