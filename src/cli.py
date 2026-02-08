@@ -62,7 +62,8 @@ def ingest(
 def ask(
     query: str = typer.Argument(..., help="Tvoje pitanje za Kronosa"),
     project: Optional[str] = typer.Option(None, "--project", "-p", help="Filtriraj po imenu projekta"),
-    limit: int = typer.Option(5, "--limit", "-n", help="Broj rezultata")
+    limit: int = typer.Option(5, "--limit", "-n", help="Broj rezultata"),
+    hyde: bool = typer.Option(False, "--hyde", help="Koristi hipotetsku pretragu (HyDE)")
 ):
     """
     Postavlja pitanje Kronosu i pretražuje memoriju.
@@ -70,7 +71,7 @@ def ask(
     oracle = Oracle()
     
     # with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-    results = oracle.ask(query, project=project, limit=limit, silent=True)
+    results = oracle.ask(query, project=project, limit=limit, silent=True, hyde=hyde)
 
     if not results["entities"] and not results["chunks"]:
         console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
@@ -82,20 +83,16 @@ def ask(
         for ent in results["entities"]:
             source = ent['metadata'].get('source')
             source_name = os.path.basename(source) if source else "Ručni unos"
-            proj_tag = f"[[dim]{ent['metadata'].get('project', 'unknown')}[/]] "
+            proj_tag = f"[{ent['metadata'].get('project', 'unknown')}]"
             
             # Entity Card formatiranje
             etype = ent['type']
             type_style = "bold green" if etype == "DECISION" else "bold yellow"
             
-            content = f"{ent['content']}\n\n[dim]Izvor: {source_name} | Kreirano: {ent['created_at']}[/]"
-            panel = Panel(
-                content,
-                title=f"{proj_tag}[{type_style}]{etype} #{ent['id']}[/]",
-                border_style="accent",
-                padding=(1, 2)
-            )
-            console.print(panel)
+            print(f"\n{proj_tag} {etype} #{ent['id']}")
+            print(f"{ent['content']}")
+            print(f"Izvor: {source_name} | Kreirano: {ent['created_at']}")
+            print("-" * 30)
 
     # 2. PRIKAZ CHUNKOVA (Evidence)
     if results["chunks"]:
@@ -162,7 +159,9 @@ def watch(
     watcher.run()
 
 @app.command()
-def chat():
+def chat(
+    hyde: bool = typer.Option(False, "--hyde", help="Koristi HyDE mode u ovom sessionu")
+):
     """
     Pokreće interaktivni razgovor s Kronosom.
     """
@@ -195,11 +194,11 @@ def chat():
                 pass # Ako ne možemo dohvatiti projekte, nastavi bez toga
             
             # Prvi pokušaj (s projektom ako je detektiran)
-            results = oracle.ask(query, project=target_project, limit=3, silent=True)
+            results = oracle.ask(query, project=target_project, limit=3, silent=True, hyde=hyde)
             
             # FALLBACK: Ako nema rezultata, pokušaj bez filtera projekta
             if not results["entities"] and not results["chunks"] and target_project:
-                results = oracle.ask(query, project=None, limit=3, silent=True)
+                results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde)
                 target_project = None # Resetiraj za prikaz
 
         if not results["entities"] and not results["chunks"]:

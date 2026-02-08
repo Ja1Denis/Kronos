@@ -15,8 +15,16 @@ class Oracle:
         root_path = os.path.dirname(db_path) 
         if not root_path: root_path = "."
         self.librarian = Librarian(root_path)
+        
+        # Lazy load za HyDE (opcionalno)
+        try:
+            from src.modules.hypothesizer import Hypothesizer
+            self.hypothesizer = Hypothesizer()
+        except Exception as e:
+            print(f"Warning: Ne mogu učitati Hypothesizer: {e}")
+            self.hypothesizer = None
 
-    def ask(self, query, project=None, limit=5, silent=False):
+    def ask(self, query, project=None, limit=5, silent=False, hyde=False):
         """
         Postavlja pitanje Kronosu koristeći 3-stage pipeline:
         1. Retrieval (Vector + Keyword)
@@ -35,9 +43,17 @@ class Oracle:
 
         # STAGE 1: Broad Retrieval
         # a) Vector
+        vector_query = query
+        if hyde and self.hypothesizer:
+            if not silent:
+                 print(f"{Fore.CYAN}💭 Generiram HyDE hipotezu...{Style.RESET_ALL}")
+            vector_query = self.hypothesizer.generate_hypothesis(query)
+            if not silent:
+                 print(f"{Fore.DIM}Hipoteza: {vector_query[:100]}...{Style.RESET_ALL}")
+
         where_filter = {"project": project} if project else None
         vector_candidates = self.collection.query(
-            query_texts=[query],
+            query_texts=[vector_query],
             n_results=limit * 2, # Uzmi više kandidata za reranking
             where=where_filter
         )
