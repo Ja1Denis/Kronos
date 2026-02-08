@@ -216,6 +216,109 @@ def mcp():
     mcp_main()
 
 @app.command()
+def backup(
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Putanja za backup datoteku (default: backups/)"),
+):
+    """
+    Kreira sigurnosnu kopiju Kronos baze podataka.
+    
+    Sprema SQLite bazu i ChromaDB store u ZIP arhivu s vremenskom oznakom.
+    """
+    import zipfile
+    import shutil
+    from datetime import datetime
+    
+    console.print(Panel("[bold accent]Kronos Backup[/]\n[info]Kreiram sigurnosnu kopiju...[/]", border_style="accent"))
+    
+    # Definiraj putanje
+    data_dir = "data"
+    backup_dir = "backups"
+    
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+    
+    # Generiraj ime backup datoteke
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = output or os.path.join(backup_dir, f"kronos_backup_{timestamp}.zip")
+    
+    # Provjeri postoji li data direktorij
+    if not os.path.exists(data_dir):
+        console.print("[error]❌ Data direktorij ne postoji. Nema podataka za backup.[/]")
+        return
+    
+    with console.status("[bold cyan]Kreiram ZIP arhivu..."):
+        try:
+            with zipfile.ZipFile(backup_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # Dodaj sve datoteke iz data direktorija
+                for root, dirs, files in os.walk(data_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, ".")
+                        zipf.write(file_path, arcname)
+                        
+            # Statistika
+            backup_size = os.path.getsize(backup_filename) / (1024 * 1024)
+            
+            console.print(f"\n[bold success]✅ Backup uspješno kreiran![/]")
+            console.print(f"   📁 Datoteka: [cyan]{backup_filename}[/]")
+            console.print(f"   📦 Veličina: [cyan]{backup_size:.2f} MB[/]")
+            
+        except Exception as e:
+            console.print(f"[error]❌ Greška pri kreiranju backupa: {e}[/]")
+
+@app.command()
+def restore(
+    backup_file: str = typer.Argument(..., help="Putanja do backup ZIP datoteke"),
+    force: bool = typer.Option(False, "--force", "-f", help="Preskoči potvrdu")
+):
+    """
+    Vraća Kronos bazu iz sigurnosne kopije.
+    
+    UPOZORENJE: Ovo će prebrisati postojeće podatke!
+    """
+    import zipfile
+    import shutil
+    
+    if not os.path.exists(backup_file):
+        console.print(f"[error]❌ Backup datoteka ne postoji: {backup_file}[/]")
+        return
+    
+    if not backup_file.endswith('.zip'):
+        console.print("[error]❌ Datoteka mora biti ZIP arhiva.[/]")
+        return
+    
+    console.print(Panel(
+        f"[bold accent]Kronos Restore[/]\n"
+        f"[warning]⚠️ UPOZORENJE: Ovo će prebrisati postojeće podatke![/]\n"
+        f"[info]Backup: {backup_file}[/]",
+        border_style="yellow"
+    ))
+    
+    if not force:
+        confirm = typer.confirm("Jesi li siguran da želiš nastaviti?", default=False)
+        if not confirm:
+            console.print("[info]Otkazano.[/]")
+            return
+    
+    data_dir = "data"
+    
+    with console.status("[bold cyan]Vraćam podatke iz backupa..."):
+        try:
+            # Obriši postojeći data direktorij
+            if os.path.exists(data_dir):
+                shutil.rmtree(data_dir)
+            
+            # Raspakiraj backup
+            with zipfile.ZipFile(backup_file, 'r') as zipf:
+                zipf.extractall(".")
+            
+            console.print(f"\n[bold success]✅ Restore uspješan![/]")
+            console.print(f"   📁 Podaci vraćeni iz: [cyan]{backup_file}[/]")
+            
+        except Exception as e:
+            console.print(f"[error]❌ Greška pri vraćanju podataka: {e}[/]")
+
+@app.command()
 def wipe():
     """
     Briše svu memoriju i resetira bazu.

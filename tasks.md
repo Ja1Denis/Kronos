@@ -62,7 +62,7 @@ Cilj: Pretvoriti Kronosa u aktivnog sugovornika i alat za upravljanje znanjem.
 
 - [x] **T011: Robustness & Safety** <!-- id: 10 -->
     - [x] Implementirati **Debounce** za watcher.
-    - [ ] Dodati **Backup** komandu (`kronos backup`).
+    - [x] Dodati **Backup** komandu (`kronos backup`).
 
 - [x] **T012: Connectivity (MCP)** <!-- id: 11 -->
     - [x] Implementirati **Model Context Protocol (MCP)** server.
