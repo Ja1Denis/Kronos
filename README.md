@@ -14,18 +14,28 @@ Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) d
 ## 🚀 Brzi Start
 
 ### 1. Ingestija (Učitavanje znanja)
-Učitaj sve dokumente iz trenutnog direktorija kako bi Kronos naučio o projektu:
+Učitaj sve dokumente iz trenutnog direktorija kako bi Kronos naučio o projektu.
+Kronos automatski prepoznaje ime projekta iz mape!
+
 ```powershell
+# Učitaj projekt (npr. iz foldera 'moj-projekt')
 .\run.ps1 ingest "." -Recursive
 ```
 
-### 2. Postavljanje Pitanja (CLI)
-Pitaj Kronosa bilo što o projektu:
+### 2. Interaktivni Chat (NOVO!)
+Razgovaraj s Kronosom o svojim projektima u prirodnom jeziku:
 ```powershell
-.\run.ps1 ask "Kako radi Watcher modul?"
+.\run.ps1 chat
+```
+*Kronos pametno filtrira odgovore ovisno o projektu kojeg spomeneš u pitanju!*
+
+### 3. Eksplicitna Pretraga (CLI)
+Pitaj Kronosa bilo što o specifičnom projektu:
+```powershell
+.\run.ps1 ask "Kako radi Watcher modul?" --project kronos
 ```
 
-### 3. Statistika
+### 4. Statistika
 Provjeri stanje memorije:
 ```powershell
 .\run.ps1 stats
