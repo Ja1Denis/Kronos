@@ -4,32 +4,37 @@ from utils.logger import logger
 from utils.stemmer import stem_text
 from modules.librarian import Librarian
 from modules.oracle import Oracle
+from modules.extractor import Extractor
 
 class Ingestor:
     def __init__(self, chunk_size=1000, db_path="data"):
         self.chunk_size = chunk_size
         self.librarian = Librarian(db_path)
         self.oracle = Oracle(os.path.join(db_path, "store"))
+        self.extractor = Extractor()
         
         if not os.path.exists(os.path.join(db_path, "archive.jsonl")):
             logger.warning("🚧 Kreiram novu arhivu...")
 
-    def run(self, path, recursive=False):
+    def run(self, path, recursive=False, silent=False):
         """
         Glavna metoda za pokretanje ingestije.
         """
-        logger.info(f"Pokrećem Ingestora na: {path}")
+        if not silent:
+            logger.info(f"Pokrećem Ingestora na: {path}")
         
         files = self._scan_files(path, recursive)
-        logger.info(f"Pronađeno {len(files)} datoteka.")
+        
+        if not silent:
+            logger.info(f"Pronađeno {len(files)} datoteka.")
 
         processed_count = 0
         for file_path in files:
-            self._process_file(file_path)
+            self._process_file(file_path, silent=silent)
             processed_count += 1
             
-        
-        logger.success(f"Završeno! Obrađeno {processed_count} datoteka.")
+        if not silent:
+            logger.success(f"Završeno! Obrađeno {processed_count} datoteka.")
 
     def _scan_files(self, path, recursive):
         """
@@ -48,7 +53,7 @@ class Ingestor:
         
         return files
     
-    def _process_file(self, file_path):
+    def _process_file(self, file_path, silent=False):
         """
         Čita datoteku, dijeli je na chunkove i sprema.
         """
@@ -69,7 +74,14 @@ class Ingestor:
                 stemmed_chunk = stem_text(chunk, mode="aggressive")
                 self.librarian.store_fts(file_path, chunk, stemmed_chunk)
             
-            # 2. Spremi u arhivu (JSONL)
+            # 2. Ekstrakcija i pohrana strukturiranih podataka
+            extracted_data = self.extractor.extract(content)
+            if any(extracted_data.values()):
+                self.librarian.store_extracted_data(file_path, extracted_data)
+                summary = self.extractor.summarize_extraction(extracted_data)
+                logger.info(f"   Strukturirano znanje: {summary}")
+
+            # 3. Spremi u arhivu (JSONL)
             self.librarian.store_archive(chunks, file_meta)
             
             # 2. Spremi u vektorsku bazu (ChromaDB)
@@ -81,7 +93,12 @@ class Ingestor:
                 metadatas=metadatas,
                 ids=ids
             )
-            logger.success(f"Vektorizirano: {os.path.basename(file_path)} ({len(chunks)} chunks)")
+            
+            # 4. Označi kao obrađeno
+            self.librarian.mark_as_processed(file_path)
+            
+            if not silent:
+                logger.success(f"Vektorizirano: {os.path.basename(file_path)} ({len(chunks)} chunks)")
             
         except Exception as e:
             logger.error(f"Greška pri čitanju {file_path}: {e}")

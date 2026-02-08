@@ -26,16 +26,21 @@ Cilj: Postaviti osnovni pipeline za ingestion i retrieval (Hybrid Search).
 ## 🧠 Faza 2: "Hardcore Razina" (Pametna Ekstrakcija)
 Cilj: Implementirati "Kronoraising" arhitekturu.
 
-- [ ] **T005: Extraction Pipeline** <!-- id: 4 -->
-    - [ ] Implementirati logiku za prepoznavanje entiteta (Regex/NLP).
-    - [ ] Izdvojiti "Problem -> Solution" parove.
-    - [ ] Strukturirati podatke u JSON.
+- [x] **T005: Extraction Pipeline** <!-- id: 4 -->
+    - [x] Implementirati logiku za prepoznavanje entiteta (Regex/NLP).
+    - [x] Izdvojiti "Problem -> Solution" parove.
+    - [x] Strukturirati podatke u JSON.
 
 - [x] **T006: Hybrid Search** <!-- id: 5 -->
     - [x] Dodati **SQLite FTS5** za keyword search.
     - [x] Povezati rezultate s ChromaDB (Reranking).
     - [x] Implementirati BM25 algoritam.
 
-- [ ] **T007: CLI Sučelje** <!-- id: 6 -->
-    - [ ] Kreirati user-friendly CLI (`kronos ask "pitanje"`).
-    - [ ] Dodati opciju `--context` za ispis relevantnih fileova.
+- [x] **T007: CLI Sučelje** <!-- id: 6 -->
+    - [x] Kreirati user-friendly CLI (`kronos ask "pitanje"`).
+    - [x] Dodati opciju `--context` za ispis relevantnih fileova.
+
+- [x] **T008: Daemon Mode (Server)** <!-- id: 7 -->
+    - [x] Implementirati FastAPI server.
+    - [x] Dodati REST endpointe (/ingest, /query, /stats).
+    - [x] Omogućiti JSON output za AI agente.

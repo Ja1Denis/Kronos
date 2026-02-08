@@ -54,6 +54,13 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 .\venv\Scripts\python.exe check_db.py
 ```
 
+### Server (API Mode)
+```powershell
+# Pokreni FastAPI server za AI agente
+.\run.ps1 serve
+```
+Kronos će biti dostupan na `http://127.0.0.1:8000`. Dokumentacija na `/docs`.
+
 ---
 
 ## 🏗️ Arhitektura

@@ -16,7 +16,7 @@ class Oracle:
         if not root_path: root_path = "."
         self.librarian = Librarian(root_path)
 
-    def ask(self, query, limit=5):
+    def ask(self, query, limit=5, silent=False):
         """
         Postavlja pitanje Kronosu (Hibridna pretraga).
         Kombinira:
@@ -26,8 +26,9 @@ class Oracle:
         from utils.stemmer import stem_text
         stemmed_query = stem_text(query, mode="aggressive")
         
-        print(f"{Fore.MAGENTA}🔮 Oracle traži odgovor na: '{query}'{Style.RESET_ALL}")
-        print(f"{Fore.MAGENTA}   (Stemmed: {stemmed_query}){Style.RESET_ALL}")
+        if not silent:
+            print(f"{Fore.MAGENTA}🔮 Oracle traži odgovor na: '{query}'{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}   (Stemmed: {stemmed_query}){Style.RESET_ALL}")
         
         # 1. Vektorska pretraga
         vector_results = self.collection.query(
@@ -69,22 +70,20 @@ class Oracle:
                 })
                 seen_contents.add(content)
                 
-        if not final_results:
-            print(f"{Fore.YELLOW}Nema rezultata.{Style.RESET_ALL}")
-            return []
+        if not silent:
+            if not final_results:
+                print(f"{Fore.YELLOW}Nema rezultata.{Style.RESET_ALL}")
+                return []
+                
+            print(f"{Fore.GREEN}Pronađeno {len(final_results)} unikatnih rezultata:{Style.RESET_ALL}")
             
-        print(f"{Fore.GREEN}Pronađeno {len(final_results)} unikatnih rezultata:{Style.RESET_ALL}")
-        
-        # Sortiraj: Vector results first (jer imaju score), pa FTS
-        # Ali zapravo je bolje po tipu.
-        
-        for i, res in enumerate(final_results[:limit*2]): # Prikazujemo top rezultate
-            source = res['metadata'].get('source', 'Unknown')
-            source_name = os.path.basename(source)
-            score_display = f"{res['score']:.2%}" if res['type'].startswith("Vector") else "N/A"
+            for i, res in enumerate(final_results[:limit*2]): # Prikazujemo top rezultate
+                source = res['metadata'].get('source', 'Unknown')
+                source_name = os.path.basename(source)
+                score_display = f"{res['score']:.2%}" if res['type'].startswith("Vector") else "N/A"
+                
+                print(f"\n{Fore.CYAN}📄 [{res['type']}] {source_name}{Style.RESET_ALL} (Score: {score_display})")
+                print(f"   {res['content'][:300].replace(chr(10), ' ')}...") # Replace newlines for cleaner output
+                print("-" * 50)
             
-            print(f"\n{Fore.CYAN}📄 [{res['type']}] {source_name}{Style.RESET_ALL} (Score: {score_display})")
-            print(f"   {res['content'][:300].replace(chr(10), ' ')}...") # Replace newlines for cleaner output
-            print("-" * 50)
-            
-        return [res['content'] for res in final_results]
+        return final_results

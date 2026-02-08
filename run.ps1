@@ -1,8 +1,7 @@
 param (
     [string]$Command,
-    [string]$Path,
+    [string]$Param1,
     [switch]$Recursive,
-    [string]$Text,
     [int]$Limit = 5
 )
 
@@ -14,18 +13,25 @@ if (-not (Test-Path $VenvPath)) {
 }
 . $VenvPath
 
-# Pokreni Python
+# Pokreni Python alat Kronos
 if ($Command -eq "ingest") {
-    $Params = @("ingest", "$Path")
-    if ($Recursive) { $Params += "--recursive" }
-    python src/main.py @Params
+    $KronosArgs = @("ingest", "$Param1")
+    if ($Recursive) { $KronosArgs += "--recursive" }
+    python src/main.py @KronosArgs
 }
-elseif ($Command -eq "query") {
-    python src/main.py query "$Text" --limit $Limit
+elseif ($Command -eq "ask") {
+    python src/main.py ask "$Param1" --limit $Limit
 }
-elseif ($Command -eq "check_db") {
-    python check_db.py
+elseif ($Command -eq "stats") {
+    python src/main.py stats
+}
+elseif ($Command -eq "serve") {
+    python src/server.py
+}
+elseif ($Command -eq "wipe") {
+    python src/main.py wipe
 }
 else {
+    # Ako nema komande, pokaži help
     python src/main.py --help
 }
