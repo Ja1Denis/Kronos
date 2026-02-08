@@ -41,3 +41,43 @@ Da bi projekt Kronos uspješno funkcionirao, ne koristimo jednog "monolitnog" ag
     -   Triggerira Ingestora (npr. na `git commit`).
     -   Upravlja pipelineom podataka.
     -   Logira pogreške i metriku uspješnosti.
+
+---
+
+## 🆕 Novi Članovi Tima (Faza 4)
+
+## 6. Agent Archivist (📜 "Arhivar")
+**Uloga:** Čuvar Event Loga i garant integriteta podataka.
+-   **Zadaci:**
+    -   Upravlja `archive.jsonl` kao primarnim izvorom istine.
+    -   Implementira event schema (insert/update/delete).
+    -   Pokreće **rebuild** procedure za regeneraciju baza iz loga.
+    -   Validira konzistentnost između JSONL ↔ SQLite ↔ ChromaDB.
+-   **Alati:** JSON streaming, checksum validacija, migration skripte.
+
+## 7. Agent Evaluator (📊 "Sudac")
+**Uloga:** Mjeri i dokazuje kvalitetu Kronosa.
+-   **Zadaci:**
+    -   Pokreće **benchmark suite** nad test pitanjima.
+    -   Mjeri Recall@K, Context Tokens, Latency.
+    -   Generira izvještaje (Markdown/PDF).
+    -   Uspoređuje različite retrieval strategije (A/B testiranje).
+-   **Alati:** pytest, statistika, vizualizacija.
+
+## 8. Agent Promoter (⭐ "Kurator")
+**Uloga:** Pretvara sirove podatke u strukturirano znanje.
+-   **Zadaci:**
+    -   Omogućuje `save` komandu za brzi unos činjenica/odluka.
+    -   Implementira `promote` za pretvaranje search rezultata u trajne zapise.
+    -   Detektira duplikate i konflikte.
+    -   Predlaže tipizaciju (Decision/Fact/Task) na temelju sadržaja.
+-   **Alati:** NLP klasifikacija, duplicate detection, user interaction.
+
+## 9. Agent Historian (⏳ "Povjesničar")
+**Uloga:** Prati evoluciju znanja kroz vrijeme.
+-   **Zadaci:**
+    -   Vraća **povijest promjena** za odluke i činjenice.
+    -   Detektira **kontradikcije** između starih i novih zapisa.
+    -   Generira **timeline** prikaz evolucije projekta.
+    -   Odgovara na pitanja tipa "Kako se X mijenjao?"
+-   **Alati:** Temporal queries, diff algoritmi, vizualizacija vremenske crte.
