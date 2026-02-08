@@ -12,6 +12,7 @@ from rich import print as rprint
 from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
+from src.utils.llm_client import LLMClient
 
 # Tema boja (Cyberpunk vibe)
 custom_theme = Theme({
@@ -186,62 +187,135 @@ def watch(
 
 @app.command()
 def chat(
-    hyde: bool = typer.Option(False, "--hyde", help="Koristi HyDE mode u ovom sessionu"),
-    expand: bool = typer.Option(False, "--expand", "-e", help="Koristi Expansion mode")
+    hyde: bool = typer.Option(True, "--hyde", help="Koristi HyDE mode (default: True)"),
+    expand: bool = typer.Option(True, "--expand", "-e", help="Koristi Expansion mode (default: True)"),
+    use_ai: bool = typer.Option(True, "--ai/--no-ai", help="Generiraj ljudski odgovor koristeći AI")
 ):
     """
     Pokreće interaktivni razgovor s Kronosom.
     """
     oracle = Oracle()
-    console.print(Panel("[bold accent]Kronos Interaktivni Terminal[/]\n[info]Pitaj me bilo što. Upiši 'exit' za kraj.[/]", border_style="accent"))
+    librarian = Librarian()
+    llm = LLMClient() if use_ai else None
+    
+    # Pokreni pozadinski Watcher za "Live Sync" dokumentacije
+    from src.modules.watcher import Watcher
+    watcher = Watcher(path=".", recursive=True)
+    watcher.start()
+    
+    status_msg = "[bold green]Live Sync: On[/] | [bold magenta]AI Mode: Active[/]"
+    if not use_ai: status_msg = "[bold green]Live Sync: On[/] | [dim]AI: Off (Quotes Only)[/]"
+    
+    console.print(Panel(f"[bold accent]Kronos Interaktivni Terminal[/]\n[info]Pitaj me bilo što. Upiši 'exit' za kraj.[/]\n[dim]Komande: /project [ime], /clear, /stats, /exit | {status_msg}[/]", border_style="accent"))
+    
+    session_project = None
     
     while True:
-        query = console.input("\n[bold cyan]Ti > [/]")
-        if query.lower() in ["exit", "quit", "izlaz", "kraj"]:
-            console.print("[yellow]Pozdrav! Kronos se vraća u san...[/]")
-            break
+        prompt_label = f"\n[bold green]({session_project or 'Global'})[/] [bold cyan]Ti > [/]" if session_project else "\n[bold cyan]Ti > [/]"
+        query = console.input(prompt_label)
         
         if not query.strip():
             continue
             
+        q_lower = query.lower().strip()
+        
+        # Komande
+        if q_lower in ["exit", "quit", "izlaz", "kraj", "/exit"]:
+            watcher.stop()
+            console.print("[yellow]Pozdrav! Kronos se vraća u san...[/]")
+            break
+            
+        if q_lower.startswith("/project"):
+            parts = query.split()
+            if len(parts) > 1:
+                session_project = parts[1]
+                console.print(f"[success]✅ Projekt postavljen na: [bold green]{session_project}[/][/]")
+            else:
+                session_project = None
+                console.print("[info]🔄 Pretraga vraćena na globalnu razinu.[/]")
+            continue
+            
+        if q_lower == "/clear":
+            os.system('cls' if os.name == 'nt' else 'clear')
+            console.print(Panel("[bold accent]Kronos Interaktivni Terminal[/]", border_style="accent"))
+            continue
+            
+        if q_lower == "/stats":
+            stats()
+            continue
+
         with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-            # Poboljšana detekcija projekta iz upita
-            target_project = None
-            q_lower = query.lower()
+            # 1. Detekcija projekta
+            target_project = session_project
+            if not session_project:
+                try:
+                    all_projs = librarian.get_project_stats().keys()
+                    for p in all_projs:
+                        if p and p.lower() in q_lower:
+                            target_project = p
+                            session_project = p
+                            console.print(f"[dim]Auto-detected project: {p}[/]")
+                            break
+                except:
+                    pass
             
-            # Dohvati listu svih projekata za pametnije uparivanje
-            all_projs = []
-            try:
-                all_projs = librarian.get_project_stats().keys()
-                for p in all_projs:
-                    if p and p.lower() in q_lower:
-                        target_project = p
-                        break
-            except:
-                pass # Ako ne možemo dohvatiti projekte, nastavi bez toga
-            
-            # Prvi pokušaj (s projektom ako je detektiran)
+            # 2. Pretraga
             results = oracle.ask(query, project=target_project, limit=3, silent=True, hyde=hyde, expand=expand)
             
-            # FALLBACK: Ako nema rezultata, pokušaj bez filtera projekta
+            # FALLBACK
             if not results["entities"] and not results["chunks"] and target_project:
                 results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde, expand=expand)
-                target_project = None # Resetiraj za prikaz
 
         if not results["entities"] and not results["chunks"]:
             console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
             continue
 
-        # Kratki prikaz u chat modu
+        # 3. AI Generacija Odgovora (RAG)
+        if use_ai and llm:
+            with console.status("[bold blue]Sintetiziram odgovor...", spinner="bouncingBar"):
+                # Pripremi kontekst
+                context_parts = []
+                for ent in results["entities"]:
+                    context_parts.append(f"ENTITY ({ent['type']}): {ent['content']}")
+                for chunk in results["chunks"]:
+                    source = chunk['metadata'].get('source', 'unknown')
+                    context_parts.append(f"DOCUMENT ({source}): {chunk['content']}")
+                
+                context_str = "\n\n".join(context_parts)
+                prompt = f"""Ti si Kronos, pametni asistent sustava semantičke memorije.
+Korisnik te pita: "{query}"
+
+Na temelju sljedećih informacija iz baze znanja, odgovori korisniku kratko, jasno i ljudski. 
+Ako informacija o nečemu ne postoji u kontekstu, reci da ne znaš.
+Uvijek koristi hrvatski jezik.
+
+KONTEKST:
+{context_str}
+
+ODGOVOR:"""
+                ai_response = llm.complete(prompt, model_name="gemini-2.0-flash")
+                
+                console.print("\n[bold magenta]Kronos >[/]")
+                from rich.markdown import Markdown
+                console.print(Markdown(ai_response))
+                console.print("[dim]─" * 40 + "[/]")
+
+        # 4. Prikaz Izvora (samo kao reference)
+        console.print("\n[dim]🔍 Izvori:[/]")
         if results["entities"]:
-            ent = results["entities"][0]
-            print(f"\n[{ent['metadata'].get('project', 'unknown')}] {ent['type']}: {ent['content']}")
+            for ent in results["entities"]:
+                etype = ent['type']
+                color = "green" if etype == "DECISION" else "yellow"
+                console.print(f"  [bold {color}]💎 {etype} #{ent['id']}:[/] {ent['content']}")
         
         if results["chunks"]:
-            chunk = results["chunks"][0]
-            source = os.path.basename(chunk['metadata'].get('source', 'Nepoznato'))
-            print(f"\n📖 Iz dokumenta '{source}':")
-            print(chunk['content'][:400])
+            for i, chunk in enumerate(results["chunks"]):
+                source = os.path.basename(chunk['metadata'].get('source', 'Nepoznato'))
+                p_tag = f"[{chunk['metadata'].get('project', 'unknown')}]"
+                score = chunk.get('score', 0)
+                # Istakni ako je visok keyword match
+                method_icon = "🔑" if "Keyword" in str(chunk.get('method','')) else "🧠"
+                console.print(f"  {method_icon} [bold cyan]{source}[/][dim] ({p_tag}):[/] {chunk['content'][:250]}...")
 
 @app.command()
 def stats():
@@ -377,6 +451,38 @@ def benchmark():
     """
     from src.benchmark import run_benchmark
     run_benchmark()
+
+@app.command()
+def audit(
+    content: str = typer.Argument(..., help="Tekst za provjeru kontradikcija"),
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Projekt za kontekst")
+):
+    """
+    Provjerava je li novi sadržaj u konfliktu s postojećim znanjem (Historian).
+    """
+    from src.modules.historian import Historian
+    historian = Historian()
+    
+    with console.status("[bold cyan]Historian analizira konzistentnost..."):
+        result = historian.find_contradictions(content, project=project)
+        
+    if result.get("contradiction_found"):
+        console.print(Panel(
+            f"[bold red]❌ DETEKTIRANA KONTRADIKCIJA![/]\n\n"
+            f"[yellow]Razlog:[/]\n{result.get('explanation')}\n\n"
+            f"[green]Sugestija:[/]\n{result.get('suggestion')}",
+            title="Historian Audit",
+            border_style="red"
+        ))
+        if result.get('conflicting_entity_ids'):
+            console.print(f"[dim]Konfliktni entiteti: {result['conflicting_entity_ids']}[/]")
+    else:
+        console.print(Panel(
+            "[bold green]✅ Nema detektiranih kontradikcija.[/]\n"
+            "Sadržaj je konzistentan s bazom znanja.",
+            border_style="green"
+        ))
+
 
 @app.command()
 def ratify(
@@ -579,6 +685,15 @@ def rebuild():
         run_rebuild()
     else:
         console.print("[info]Otkazano.[/]")
+
+@app.command()
+def reindex():
+    """
+    Re-indeksira postojeće entitete iz SQLite baze u ChromaDB (Vektorsku bazu).
+    Koristi ovu komandu nakon nadogradnje sustava.
+    """
+    from src.reindex import reindex_entities
+    reindex_entities()
 
 @app.command()
 def wipe():

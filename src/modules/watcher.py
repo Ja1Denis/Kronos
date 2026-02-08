@@ -55,15 +55,23 @@ class Watcher:
         self.event_handler = DebouncedEventHandler(self.ingestor)
         self.observer = Observer()
 
-    def run(self):
-        """Pokreće monitoring u petlji."""
+    def start(self):
+        """Pokreće observer u pozadinskoj niti."""
         logger.info(f"👀 Kronos Watcher pokrenut na: {os.path.abspath(self.path)}")
         self.observer.schedule(self.event_handler, self.path, recursive=self.recursive)
         self.observer.start()
+
+    def stop(self):
+        """Zaustavlja observer."""
+        self.observer.stop()
+        self.observer.join()
+        logger.info("🛑 Watcher zaustavljen.")
+
+    def run(self):
+        """Blokirajuća metoda za samostalno pokretanje."""
+        self.start()
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            self.observer.stop()
-            logger.info("🛑 Watcher zaustavljen.")
-        self.observer.join()
+            self.stop()

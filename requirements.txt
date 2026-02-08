@@ -15,3 +15,5 @@ openai
 # pytest httpx are usually for dev but keep them if needed
 pytest
 httpx
+# google-generativeai (Deprecated)
+google-genai

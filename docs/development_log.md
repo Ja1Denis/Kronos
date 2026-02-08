@@ -1,15 +1,43 @@
 # Development Log - Kronos
 
+## [2026-02-08] - Faza 6: "Cognitive Mastery" (Historian & Contradiction)
+
+### Dodano:
+- **`src/modules/historian.py`**: Novi modul za semantičku analizu kontradikcija. Koristi LLM (Gemini) za usporedbu novih tvrdnji s postojećim "Decision" i "Fact" entitetima.
+- **`audit` CLI komanda**: Omogućuje korisniku ručnu provjeru konzistentnosti (`kronos audit "tvrdnja"`).
+- **Dual Vector Search**: Nadograđen `Oracle` da izvodi dvije paralelne pretrage:
+    1. Standardni "chunk" search (dokumenti).
+    2. "Entity-focused" search (samo odluke/činjenice) s boostanim score-om. Ovo rješava problem gdje su bitni entiteti bili nadjačani velikim dokumentima.
+- **ChromaDB Entity Indexing**: `Librarian.save_entity` i `Ingestor` sada automatski indeksiraju entitete u ChromaDB, omogućujući njihovo pronalaženje putem vektorske pretrage (ne samo keyword search).
+
+### Poboljšano:
+- **Testiranje**: Dodan `test_historian.py` za validaciju detekcije kontradikcija.
+- **Cleanup**: Implementirana skripta za čišćenje "zombi" procesa (Python/Ingestor) koji su preostali od dugotrajnog rada.
+
+### Popravci (Bugfixes):
+- **Oracle Query Logic**: Ispravljen `where` clause u ChromaDB upitima. Zamijenjen implicitni `AND` (dict merge) s eksplicitnim `$and` operatorom koji ChromaDB zahtijeva.
+- **Entity Visibility**: Riješen problem gdje se odluke nisu pojavljivale u pretrazi ako nisu imale točan keyword match. Sada se koriste semantički embeddingi.
+
+---
+
 ## [2026-02-08] - Faza 5 Start: "Symbiosis" Planning
 
 ### Kontekst:
 - Kreće implementacija **Generative Intelligence** značajki (HyDE, Query Expansion).
 - Cilj je podići **Recall@5** s trenutnih 70.5% na >85%.
 
-### Promjene (Planirano):
-- **T020: HyDE Implementation**: Integracija Gemini API-ja za generiranje hipotetskih dokumanata prije vektorske pretrage.
-- **T021: Contextual Retrieval**: Poboljšanje `Ingestor`-a da čuva referencu na *parent* dokument (rečenica -> paragraf).
-- **T022: Query Expansion**: Korištenje LLM-a za parafraziranje korisničkog upita u 3-5 varijacija.
+### Dovršeno (Faza 5):
+- **T020: HyDE Implementation**: Integracija Gemini API-ja (v2.0-flash) za generiranje hipoteza.
+- **T022: Query Expansion**: Paralelna generacija varijacija upita.
+- **Live Sync**: Integracija `Watcher` modula izravno u `chat` CLI. Kronos sada automatski re-ingestira promjene u `.md` datotekama tijekom chata.
+- **Optimization**: Uveden `ThreadPoolExecutor` za paralelno procesiranje sub-upita.
+
+### Promjene (U tijeku):
+- **T021: Contextual Retrieval**: Poboljšanje `Ingestor`-a (parent references).
+
+### Poboljšano:
+- **Optimization (Search Latency)**: U `Oracle.ask` uvedena paralelna obrada (`ThreadPoolExecutor`) za HyDE i Query Expansion. Višestruki LLM pozivi sada idu istovremeno.
+- **Hypothesizer Thread-Safety**: Dodan `threading.Lock` za perzistentni JSON cache.
 
 ### Popravci (Bugfixes):
 - **CLI Rendering**: Zamijenjen `rich.Panel` s običnim `print` ispisom u `ask` i `chat` komandama zbog problema s prikazom na Windows terminalu.

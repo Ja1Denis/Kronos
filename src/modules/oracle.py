@@ -1,6 +1,7 @@
 from colorama import Fore, Style
 import chromadb
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 class Oracle:
     def __init__(self, db_path="data/store"):
@@ -44,32 +45,56 @@ class Oracle:
             vector_query = self.hypothesizer.generate_hypothesis(query)
             # if not silent: print(f"{Fore.DIM}Hipoteza: {vector_query[:100]}...{Style.RESET_ALL}")
         
-        # Vector
+        # Vector Search - Main (Chunks + Entities mixed)
         where_filter = {"project": project} if project else None
+        
         vector_candidates = self.collection.query(
             query_texts=[vector_query],
             n_results=limit * 2,
             where=where_filter
         )
         
+        entity_where = {"type": "entity"}
+        if project:
+             # Explicit AND for ChromaDB
+             entity_where = {"$and": [{"type": "entity"}, {"project": project}]}
+             
+        entity_candidates = self.collection.query(
+            query_texts=[vector_query],
+            n_results=limit,
+            where=entity_where
+        )
+        
         # FTS
         fts_candidates = self.librarian.search_fts(stemmed_query, project=project, limit=limit * 2)
         
         candidates = []
-        if vector_candidates['documents']:
-            for doc, meta, dist in zip(vector_candidates['documents'][0], vector_candidates['metadatas'][0], vector_candidates['distances'][0]):
-                 candidates.append({
-                     "content": doc,
-                     "metadata": meta,
-                     "score": (1 - dist),
-                     "method": "Vector"
-                 })
+        
+        # Helper za dodavanje
+        def add_candidates(source_res, is_entity_boost=False):
+            if source_res and source_res['documents']:
+                for doc, meta, dist in zip(source_res['documents'][0], source_res['metadatas'][0], source_res['distances'][0]):
+                     # Boost score za entitete
+                     score = (1 - dist)
+                     if is_entity_boost: 
+                         score += 0.2 # Artificial boost for focused entities
+                     
+                     candidates.append({
+                         "content": doc,
+                         "metadata": meta,
+                         "score": score,
+                         "method": "Vector (Entity)" if is_entity_boost else "Vector"
+                     })
+
+        add_candidates(vector_candidates)
+        add_candidates(entity_candidates, is_entity_boost=True)
+
                  
         for path, content in fts_candidates:
              candidates.append({
                  "content": content,
                  "metadata": {"source": path},
-                 "score": 0.5, # Base FTS score
+                 "score": 0.8, # Povećan Base FTS score (prije 0.5)
                  "method": "Keyword"
              })
              
@@ -96,27 +121,50 @@ class Oracle:
              project_info = f" na projektu [bold cyan]{project}[/]" if project else ""
              print(f"{Fore.MAGENTA}🔮 Kronos razmatra{project_info}: '{query}'{Style.RESET_ALL}")
 
-        # 2. Retrieval Loop (Merge & Rank)
+        # 2. Retrieval Loop (Paralelno)
         merged_chunks = {}
         
-        for q in queries:
-            # Silent za sub-upite da ne spamamo konzolu, osim ako je expansion uključen pa želimo vidjeti progress?
-            sub_silent = True 
-            candidates = self._retrieve_candidates(q, project, limit, hyde, sub_silent)
-            
+        def fetch_candidates(q):
+            return self._retrieve_candidates(q, project, limit, hyde, silent=True)
+
+        with ThreadPoolExecutor(max_workers=len(queries)) as executor:
+            results = list(executor.map(fetch_candidates, queries))
+
+        # 3. Merge results & Rank
+        for candidates in results:
             for c in candidates:
                 content = c["content"]
+                
+                # --- [BOOSTING LOGIC] ---
+                # Dajemo prednost "živim" dokumentima naspram statične dokumentacije
+                source = c['metadata'].get('source', '').lower()
+                boost = 0.0
+                
+                # Visoki prioritet: Trenutno stanje i logovi
+                if any(x in source for x in ["current_status", "status", "todo", "development_log", "log.md"]):
+                    boost += 0.5
+                # Srednji prioritet: Planovi i zadaci
+                elif any(x in source for x in ["tasks.md", "vision.md", "README"]):
+                    boost += 0.2
+                # Penalizacija: Stare arhive ili backupi (ako ih ima u bazi)
+                elif "archive" in source or "old" in source:
+                    boost -= 0.3
+                
+                # Primijeni boost na score
+                current_score = c["score"] + boost
+                
                 if content in merged_chunks:
-                    # Boost postojećeg (RRF-ish)
-                    merged_chunks[content]["score"] += c["score"]
+                    # RRF-ish fusion s kumulativnim score-om
+                    merged_chunks[content]["score"] += current_score
                     if c["method"] not in merged_chunks[content]["method"]:
                          merged_chunks[content]["method"] += f", {c['method']}"
                 else:
+                    c["score"] = current_score # spremi boostani score
                     merged_chunks[content] = c
 
         all_chunks = list(merged_chunks.values())
         
-        # Rerank
+        # Rerank prema finalnom (boostanom) score-u
         all_chunks.sort(key=lambda x: x["score"], reverse=True)
         
         # Contextual Expansion za top rezultate
@@ -129,18 +177,63 @@ class Oracle:
                 else:
                     chunk['expanded_content'] = chunk['content']
 
-        # Entity Search (samo jednom, na originalni upit)
-        entities = self.librarian.search_entities(query, project=project, limit=limit)
+        # 4. Entity Search (Keyword + Semantic)
+        # Prvo dohvati keyword kandidate
+        stopwords = {'sto', 'što', 'je', 'to', 'u', 'na', 'za', 'da', 'i', 'a', 'ili', 'kako', 'koji', 'koja', 'koje', 'mi', 'ti', 'projektu', 'projekt'}
+        keywords = [w for w in query.lower().split() if w not in stopwords and len(w) > 2]
+        
+        keyword_entities = []
+        seen_ids = set()
+        for kw in keywords:
+            ents = self.librarian.search_entities(kw, project=project, limit=limit)
+            for e in ents:
+                if e['id'] not in seen_ids:
+                    keyword_entities.append(e)
+                    seen_ids.add(e['id'])
+        
+        # Ako nema rezultata s pojedinačnim riječima, probaj cijeli upit
+        if not keyword_entities:
+            keyword_entities = self.librarian.search_entities(query, project=project, limit=limit)
+            for e in keyword_entities: seen_ids.add(e['id'])
+
+        # Sada procesiraj final_chunks i izdvoji semantic entities
+        semantic_entities = []
+        regular_chunks = []
+
+        for c in final_chunks:
+            meta = c['metadata']
+            if meta.get('type') == 'entity':
+                # Ovo je entitet iz ChromaDB-a
+                eid = meta.get('entity_id')
+                # Ako već imamo ovaj entitet iz keyword searcha, preskoči duplikat, 
+                # ali možda semantic search ima bolji score? Zadržimo to.
+                if eid not in seen_ids:
+                    ent = {
+                        "id": eid,
+                        "content": c['content'],
+                        "metadata": meta,
+                        "type": meta.get('entity_type', 'UNKNOWN').upper(),
+                        "created_at": meta.get('created_at', '')
+                    }
+                    semantic_entities.append(ent)
+                    seen_ids.add(eid)
+            else:
+                regular_chunks.append(c)
+
+        # Spoji sve entitete (prioritet: Semantic > Keyword jer su rerankirani)
+        # Zapravo, keyword entities nisu rerankirani.
+        # Idemo: Semantic Entities + Keyword Entities
+        final_entities = semantic_entities + [e for e in keyword_entities if e['id'] not in seen_ids] 
 
         return {
             "entities": [
                 {
                     "id": ent['id'],
                     "content": ent['content'],
-                    "metadata": {"source": ent['file_path'], "project": ent['project']},
-                    "type": ent['type'].upper(),
+                    "metadata": ent.get('metadata', {"source": ent.get('file_path'), "project": ent.get('project')}),
+                    "type": ent['type'].upper() if 'type' in ent else "UNKNOWN",
                     "created_at": ent['created_at']
-                } for ent in entities
+                } for ent in final_entities
             ],
             "chunks": [
                 {
@@ -149,6 +242,6 @@ class Oracle:
                     "metadata": c["metadata"],
                     "score": c["score"],
                     "method": c["method"]
-                } for c in final_chunks
+                } for c in regular_chunks
             ]
         }

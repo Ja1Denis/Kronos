@@ -8,32 +8,37 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 CACHE_DIR = os.path.join(ROOT_DIR, "data", "cache")
 CACHE_FILE = os.path.join(CACHE_DIR, "hyde_cache.json")
 
+import threading
+
 class Hypothesizer:
     def __init__(self, llm_client: LLMClient = None):
         self.llm = llm_client or LLMClient()
         self.cache = {}
+        self.lock = threading.Lock()
         self._load_cache()
         
     def _load_cache(self):
         """Učitava cache iz JSON datoteke."""
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR, exist_ok=True)
-            
-        if os.path.exists(CACHE_FILE):
-            try:
-                with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                    self.cache = json.load(f)
-            except Exception as e:
-                print(f"Warning: Ne mogu učitati HyDE cache: {e}")
-                self.cache = {}
+        with self.lock:
+            if not os.path.exists(CACHE_DIR):
+                os.makedirs(CACHE_DIR, exist_ok=True)
+                
+            if os.path.exists(CACHE_FILE):
+                try:
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        self.cache = json.load(f)
+                except Exception as e:
+                    print(f"Warning: Ne mogu učitati HyDE cache: {e}")
+                    self.cache = {}
 
     def _save_cache(self):
         """Sprema cache u JSON datoteku."""
-        try:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.cache, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Warning: Ne mogu spremiti HyDE cache: {e}")
+        with self.lock:
+            try:
+                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                    json.dump(self.cache, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Warning: Ne mogu spremiti HyDE cache: {e}")
 
     def generate_hypothesis(self, query: str) -> str:
         """
@@ -41,9 +46,10 @@ class Hypothesizer:
         """
         # 1. Check Cache
         query_hash = hashlib.md5(query.strip().lower().encode()).hexdigest()
-        if query_hash in self.cache:
-            # print(f"[DEBUG] HyDE Cache Hit!") # Otkomentiraj za debug
-            return self.cache[query_hash]
+        
+        with self.lock:
+            if query_hash in self.cache:
+                return self.cache[query_hash]
 
         # 2. LLM Call
         prompt = (
@@ -57,7 +63,8 @@ class Hypothesizer:
         
         # 3. Save to Cache (samo ako je validan odgovor)
         if not hypothesis.startswith("MOCK") and not hypothesis.startswith("ERROR") and not hypothesis.startswith("BLOCKED"):
-            self.cache[query_hash] = hypothesis.strip()
+            with self.lock:
+                self.cache[query_hash] = hypothesis.strip()
             self._save_cache()
             
         # Ako je mock ili greška, vrati originalni upit kao fallback
@@ -75,13 +82,14 @@ class Hypothesizer:
         cache_key = f"EXPAND_{query.strip().lower()}"
         query_hash = hashlib.md5(cache_key.encode()).hexdigest()
         
-        if query_hash in self.cache:
-            try:
-                cached_data = json.loads(self.cache[query_hash])
-                if isinstance(cached_data, list):
-                    return cached_data
-            except:
-                pass 
+        with self.lock:
+            if query_hash in self.cache:
+                try:
+                    cached_data = json.loads(self.cache[query_hash])
+                    if isinstance(cached_data, list):
+                        return cached_data
+                except:
+                    pass 
         
         # 2. LLM Call
         prompt = (
@@ -114,7 +122,8 @@ class Hypothesizer:
         
         # 3. Save to Cache
         if not response.startswith("MOCK") and not response.startswith("ERROR"):
-            self.cache[query_hash] = json.dumps(final_variations)
+            with self.lock:
+                self.cache[query_hash] = json.dumps(final_variations)
             self._save_cache()
             
         return final_variations

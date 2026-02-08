@@ -1,6 +1,8 @@
 @echo off
 title Kronos AI Chat
-mode con: cols=120 lines=40
+:: Postavi širinu i osiguraj veliki buffer za scrollanje (5000 linija)
+mode con: cols=130
+powershell -command "&{$H=get-host;$W=$H.ui.rawui;$B=$W.buffersize;$B.height=5000;$W.buffersize=$B;}"
 cd /d "e:\G\GeminiCLI\ai-test-project\kronos"
 
 :: Provjera venv-a

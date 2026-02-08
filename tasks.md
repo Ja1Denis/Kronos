@@ -139,3 +139,27 @@ Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za gen
     - [x] Auto-tagging relevantnih chunkova (LLM/Vector match).
     - [x] Korisnička CLI naredba `analyze`.
     - [x] Vizualizacija mapa znanja (Knowledge Graph basic).
+
+- [x] **T024: RAG Chat & UX Finalization** <!-- id: 23 -->
+    - [x] Integrirati Gemini za generiranje ljudskih odgovora (RAG).
+    - [x] Live Sync podrška unutar Chat CLI-ja (pozadinski Watcher).
+    - [x] Popravljeni Windows CLI problemi (Scroll buffer, Window size).
+    - [x] Implementirano "Strict Keyword Boost" za tehničke pojmove u Oracleu.
+
+## 🚀 Faza 6: "Cognitive Mastery" (Advanced Autonomy)
+Cilj: Puna autonomija u upravljanju znanjem i postizanje vrhunske preciznosti sustava.
+
+- [ ] **T025: Autonomous Agent Curator** <!-- id: 24 -->
+    - [ ] Razvoj samostalne klasifikacije (Decision/Task/Fact) bez korisničkog unosa.
+    - [ ] Pametna detekcija duplikata i auto-merging sličnih informacija.
+    - [ ] Proaktivno predlaganje ažuriranja zastarjelih informacija.
+
+- [ ] **T026: Knowledge Timeline (Historian)** <!-- id: 25 -->
+    - [x] Implementirati `--history` view koji vizualno prikazuje evoluciju dokumenta.
+    - [x] Detekcija kontradikcija između starih odluka i novih unosa.
+    - [x] "Promote & Deprecate" sustav za upravljanje životnim ciklusom znanja.
+
+- [ ] **T027: Precision Tuning (85% Recall Target)** <!-- id: 26 -->
+    - [ ] Implementacija Cross-Encodera za napredni Reranking (Stage 3).
+    - [ ] Finetuning embeddinga ili prelazak na veće modele za bolju semantiku.
+    - [ ] Validacija Recall@5 metrike na proširenom testnom skupu.

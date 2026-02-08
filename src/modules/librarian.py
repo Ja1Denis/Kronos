@@ -16,6 +16,43 @@ class Librarian:
         # Inicijalizacija
         self._init_sqlite()
         # Chroma se inicijalizira lazy (na prvi poziv)
+        self.chroma_client = None
+
+    def _get_collection(self):
+        """Helper za dohvat ChromaDB kolekcije."""
+        if not self.chroma_client:
+            self.chroma_client = chromadb.PersistentClient(path=self.store_path)
+        return self.chroma_client.get_or_create_collection(name="kronos_memory")
+
+    def _index_entity(self, eid, etype, content, project=None, source=None):
+        """Indeksira entitet u ChromaDB za semantičku pretragu."""
+        try:
+            collection = self._get_collection()
+            meta = {
+                "source": source or "manual",
+                "project": project or "default",
+                "type": "entity", # Marker za filtriranje
+                "entity_type": etype,
+                "entity_id": eid,
+                "created_at": datetime.now().isoformat()
+            }
+            collection.upsert(
+                ids=[f"entity_{eid}"],
+                documents=[content],
+                metadatas=[meta]
+            )
+        except Exception as e:
+            print(f"{Fore.RED}Greška pri indeksiranju entiteta #{eid}: {e}{Style.RESET_ALL}")
+
+    def _delete_entities_from_chroma(self, source_path):
+        """Briše sve entitete vezane uz datoteku iz ChromaDB."""
+        try:
+            collection = self._get_collection()
+            # Brisanje po metapodatku 'source' i 'type'='entity'
+            collection.delete(where={"$and": [{"source": source_path}, {"type": "entity"}]})
+        except Exception as e:
+            print(f"{Fore.RED}Greška pri brisanju entiteta iz ChromaDB: {e}{Style.RESET_ALL}")
+
 
     def _init_sqlite(self):
         """Kreira tablice za praćenje datoteka i FTS pretragu."""
@@ -192,17 +229,27 @@ class Librarian:
         cursor = conn.cursor()
         
         try:
-            # Prvo obriši stare entitete za ovaj file
+            # Prvo obriši stare entitete za ovaj file (SQLite + Chroma)
             cursor.execute('DELETE FROM entities WHERE file_path = ?', (file_path,))
+            self._delete_entities_from_chroma(file_path) # <--- NOVO
             
             timestamp = datetime.now().isoformat()
             
             # Helper za insert
-            def insert_entity(etype, content, preview=""):
+            def insert_entity(etype, content, preview="", meta_extra=None):
+                # 1. SQLite
+                v_from = meta_extra.get('valid_from') if meta_extra else None
+                v_to = meta_extra.get('valid_to') if meta_extra else None
+                sup_by = meta_extra.get('superseded_by') if meta_extra else None
+                
                 cursor.execute('''
-                    INSERT INTO entities (file_path, project, type, content, context_preview, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (file_path, project, etype, content, preview, timestamp))
+                    INSERT INTO entities (file_path, project, type, content, context_preview, valid_from, valid_to, superseded_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (file_path, project, etype, content, preview, v_from, v_to, sup_by, timestamp))
+                
+                # 2. ChromaDB
+                new_id = cursor.lastrowid
+                self._index_entity(new_id, etype, content, project, source=file_path)
 
             # Spremi probleme
             for item in data.get('problems', []):
@@ -214,29 +261,27 @@ class Librarian:
                 
             # Spremi odluke
             for item in data.get('decisions', []):
-                # Provjera je li item string ili dict (kompatibilnost)
                 if isinstance(item, dict):
                     content = item.get('content', '')
-                    v_from = item.get('valid_from')
-                    v_to = item.get('valid_to')
-                    sup_by = item.get('superseded_by')
-                    
-                    cursor.execute('''
-                        INSERT INTO entities (file_path, project, type, content, valid_from, valid_to, superseded_by, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (file_path, project, 'decision', content, v_from, v_to, sup_by, timestamp))
+                    insert_entity('decision', content, meta_extra=item)
                 else:
-                    # Stari format (samo string)
                     insert_entity('decision', item)
                 
             # Spremi zadatke
             for item in data.get('tasks', []):
                 status_icon = "✅" if item['status'] == 'done' else "todo"
+                # Taskove možda ne želimo vektorizirati kao 'knowledge', ali neka budu za sad.
                 insert_entity('task', f"[{status_icon}] {item['content']}")
 
-            # Spremi kodne blokove (samo meta)
+            # Kodne blokove NE vektoriziramo kao entitete jer su već u chunkovima
+            # (ili možemo ako želimo search po kodu)
             for item in data.get('code_snippets', []):
-                insert_entity('code', item['language'], item['preview'])
+                # insert_entity('code', item['language'], item['preview'])
+                # Samo SQLite za code snippet preview
+                cursor.execute('''
+                    INSERT INTO entities (file_path, project, type, content, context_preview, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (file_path, project, 'code', item['language'], item['preview'], timestamp))
 
             conn.commit()
             
@@ -272,6 +317,10 @@ class Librarian:
                 "content": content,
                 "project": project
             })
+            
+            # Index in ChromaDB
+            self._index_entity(new_id, etype, content, project)
+
             
             return new_id
         except Exception as e:
