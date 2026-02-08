@@ -20,8 +20,14 @@ class Ingestor:
         """
         Glavna metoda za pokretanje ingestije.
         """
+        # Detektiraj ime projekta iz zadnjeg foldera u putanji
+        full_path = os.path.abspath(path)
+        project_name = os.path.basename(full_path)
+        if not project_name: # Slučaj ako je path npr. "C:/"
+            project_name = "default"
+
         if not silent:
-            logger.info(f"Pokrećem Ingestora na: {path}")
+            logger.info(f"Pokrećem Ingestora na projektu [bold cyan]{project_name}[/] (putanja: {path})")
         
         files = self._scan_files(path, recursive)
         
@@ -30,11 +36,11 @@ class Ingestor:
 
         processed_count = 0
         for file_path in files:
-            self._process_file(file_path, silent=silent)
+            self._process_file(file_path, project=project_name, silent=silent)
             processed_count += 1
             
         if not silent:
-            logger.success(f"Završeno! Obrađeno {processed_count} datoteka.")
+            logger.success(f"Završeno! Projekt [bold cyan]{project_name}[/] je spreman. Obrađeno {processed_count} datoteka.")
 
     def _scan_files(self, path, recursive):
         """
@@ -53,7 +59,7 @@ class Ingestor:
         
         return files
     
-    def _process_file(self, file_path, silent=False):
+    def _process_file(self, file_path, project="default", silent=False):
         """
         Čita datoteku, dijeli je na chunkove i sprema.
         """
@@ -65,27 +71,32 @@ class Ingestor:
                 return
                 
             chunks = self._chunk_content(content)
-            file_meta = {"source": file_path, "filename": os.path.basename(file_path)}
+            file_meta = {
+                "source": file_path, 
+                "filename": os.path.basename(file_path),
+                "project": project
+            }
             
             # 1. Pripremi FTS (očisti stare zapise)
             self.librarian.delete_fts(file_path)
 
             for chunk in chunks:
                 stemmed_chunk = stem_text(chunk, mode="aggressive")
-                self.librarian.store_fts(file_path, chunk, stemmed_chunk)
+                self.librarian.store_fts(file_path, chunk, stemmed_chunk, project=project)
             
             # 2. Ekstrakcija i pohrana strukturiranih podataka
             extracted_data = self.extractor.extract(content)
             if any(extracted_data.values()):
-                self.librarian.store_extracted_data(file_path, extracted_data)
+                self.librarian.store_extracted_data(file_path, extracted_data, project=project)
                 summary = self.extractor.summarize_extraction(extracted_data)
-                logger.info(f"   Strukturirano znanje: {summary}")
+                if not silent:
+                    logger.info(f"   Strukturirano znanje: {summary}")
 
             # 3. Spremi u arhivu (JSONL)
             self.librarian.store_archive(chunks, file_meta)
             
-            # 2. Spremi u vektorsku bazu (ChromaDB)
-            ids = [f"{os.path.basename(file_path)}_{i}" for i in range(len(chunks))]
+            # Vektorizacija (ChromaDB)
+            ids = [f"{os.path.basename(file_path)}_{i}_{hash(chunk)}" for i in range(len(chunks))]
             metadatas = [file_meta for _ in chunks]
             
             self.oracle.collection.upsert(
@@ -95,10 +106,10 @@ class Ingestor:
             )
             
             # 4. Označi kao obrađeno
-            self.librarian.mark_as_processed(file_path)
+            self.librarian.mark_as_processed(file_path, project=project)
             
             if not silent:
-                logger.success(f"Vektorizirano: {os.path.basename(file_path)} ({len(chunks)} chunks)")
+                logger.success(f"Vektorizirano: {os.path.basename(file_path)} [{project}]")
             
         except Exception as e:
             logger.error(f"Greška pri čitanju {file_path}: {e}")

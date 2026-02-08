@@ -26,6 +26,7 @@ class Librarian:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS files (
                 path TEXT PRIMARY KEY,
+                project TEXT,
                 last_modified REAL,
                 hash TEXT,
                 processed_at TEXT
@@ -38,6 +39,7 @@ class Librarian:
             cursor.execute('''
                 CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
                     path,           -- Putanja do datoteke
+                    project,        -- Ime projekta
                     content,        -- Originalni sadržaj chunka
                     stemmed_content -- Stemirani sadržaj (za keyword search)
                 )
@@ -50,17 +52,27 @@ class Librarian:
             CREATE TABLE IF NOT EXISTS entities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT,
+                project TEXT,
                 type TEXT, -- 'problem', 'solution', 'decision', 'task'
                 content TEXT,
                 context_preview TEXT,
                 created_at TEXT
             )
         ''')
+        
+        # PROVJERA: Ako tablice postoje ali nemaju 'project' stupac, dodaj ga (migracija)
+        try:
+            cursor.execute("ALTER TABLE files ADD COLUMN project TEXT")
+            cursor.execute("ALTER TABLE entities ADD COLUMN project TEXT")
+            # FTS5 tablice se ne mogu lako ALTER-ati, pa ćemo je samo ostaviti
+            # ako je već kreirana bez 'project' polja (ili je drop i re-create)
+        except sqlite3.OperationalError:
+            pass # Kolona već postoji
             
         conn.commit()
         conn.close()
 
-    def search_fts(self, query_stemmed, limit=5):
+    def search_fts(self, query_stemmed, project=None, limit=5):
         """
         Izvodi keyword search koristeći FTS5 na stemiranom sadržaju.
         Vraća listu (path, content, rank).
@@ -68,16 +80,23 @@ class Librarian:
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         
-        # FTS5 pretraga po stemiranom sadržaju
-        # ORDER BY rank sortira po relevantnosti (BM25 ugrađen u FTS5)
         try:
-            cursor.execute('''
-                SELECT path, content 
-                FROM knowledge_fts 
-                WHERE knowledge_fts MATCH ? 
-                ORDER BY rank 
-                LIMIT ?
-            ''', (query_stemmed, limit))
+            if project:
+                cursor.execute('''
+                    SELECT path, content 
+                    FROM knowledge_fts 
+                    WHERE knowledge_fts MATCH ? AND project = ?
+                    ORDER BY rank 
+                    LIMIT ?
+                ''', (query_stemmed, project, limit))
+            else:
+                cursor.execute('''
+                    SELECT path, content 
+                    FROM knowledge_fts 
+                    WHERE knowledge_fts MATCH ? 
+                    ORDER BY rank 
+                    LIMIT ?
+                ''', (query_stemmed, limit))
             results = cursor.fetchall()
         except Exception as e:
             print(f"{Fore.RED}Greška pri FTS pretrazi: {e}{Style.RESET_ALL}")
@@ -86,16 +105,16 @@ class Librarian:
         conn.close()
         return results
 
-    def store_fts(self, path, content, stemmed_content):
+    def store_fts(self, path, content, stemmed_content, project=None):
         """Sprema chunk u FTS indeks."""
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
-                INSERT INTO knowledge_fts (path, content, stemmed_content)
-                VALUES (?, ?, ?)
-            ''', (path, content, stemmed_content))
+                INSERT INTO knowledge_fts (path, content, stemmed_content, project)
+                VALUES (?, ?, ?, ?)
+            ''', (path, content, stemmed_content, project))
             conn.commit()
         except Exception as e:
             print(f"{Fore.RED}Greška pri FTS insertu: {e}{Style.RESET_ALL}")
@@ -113,13 +132,13 @@ class Librarian:
             print(f"{Fore.RED}Greška pri brisanju iz FTS-a: {e}{Style.RESET_ALL}")
         conn.close()
 
-    def store_extracted_data(self, file_path, data):
+    def store_extracted_data(self, file_path, data, project=None):
         """Sprema ekstrahirane podatke u entities tablicu."""
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         
         try:
-            # Prvo obriši stare entitete za vaj file
+            # Prvo obriši stare entitete za ovaj file
             cursor.execute('DELETE FROM entities WHERE file_path = ?', (file_path,))
             
             timestamp = datetime.now().isoformat()
@@ -127,9 +146,9 @@ class Librarian:
             # Helper za insert
             def insert_entity(etype, content, preview=""):
                 cursor.execute('''
-                    INSERT INTO entities (file_path, type, content, context_preview, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (file_path, etype, content, preview, timestamp))
+                    INSERT INTO entities (file_path, project, type, content, context_preview, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (file_path, project, etype, content, preview, timestamp))
 
             # Spremi probleme
             for item in data.get('problems', []):
@@ -176,17 +195,16 @@ class Librarian:
             return True # Već obrađeno i nije mijenjano
         return False
 
-    def mark_as_processed(self, file_path):
+    def mark_as_processed(self, file_path, project=None):
         """Zabilježi da je datoteka obrađena."""
         current_mtime = os.path.getmtime(file_path)
-        # Izračunaj hash sadržaja za dodatnu sigurnost (opcionalno)
         
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR REPLACE INTO files (path, last_modified, processed_at)
-            VALUES (?, ?, ?)
-        ''', (file_path, current_mtime, datetime.now().isoformat()))
+            INSERT OR REPLACE INTO files (path, project, last_modified, processed_at)
+            VALUES (?, ?, ?, ?)
+        ''', (file_path, project, current_mtime, datetime.now().isoformat()))
         conn.commit()
         conn.close()
 

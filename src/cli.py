@@ -74,6 +74,7 @@ def ingest(
 @app.command()
 def ask(
     query: str = typer.Argument(..., help="Tvoje pitanje za Kronosa"),
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Filtriraj po imenu projekta"),
     limit: int = typer.Option(5, "--limit", "-n", help="Broj rezultata")
 ):
     """
@@ -82,7 +83,7 @@ def ask(
     oracle = Oracle()
     
     with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-        results = oracle.ask(query, limit=limit, silent=True)
+        results = oracle.ask(query, project=project, limit=limit, silent=True)
 
     if not results:
         console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
@@ -99,11 +100,12 @@ def ask(
         
         # Formatiranje boje ovisno o tipu
         type_color = "green" if "Vector" in m_type else "yellow"
+        proj_tag = f"[[dim]{res['metadata'].get('project', 'unknown')}[/]] "
         
         panel_content = f"{content}\n\n[dim]Izvor: {source_name} | Score: {score:.2%}[/]"
         panel = Panel(
             panel_content,
-            title=f"[{type_color}]{m_type} #{i+1}[/]",
+            title=f"{proj_tag}[{type_color}]{m_type} #{i+1}[/]",
             border_style=type_color,
             padding=(1, 2)
         )
@@ -123,6 +125,52 @@ def watch(
     
     watcher = Watcher(path=path, recursive=recursive)
     watcher.run()
+
+@app.command()
+def chat():
+    """
+    Pokreće interaktivni razgovor s Kronosom.
+    """
+    oracle = Oracle()
+    console.print(Panel("[bold accent]Kronos Interaktivni Terminal[/]\n[info]Pitaj me bilo što. Upiši 'exit' za kraj.[/]", border_style="accent"))
+    
+    while True:
+        query = console.input("\n[bold cyan]Ti > [/]")
+        if query.lower() in ["exit", "quit", "izlaz", "kraj"]:
+            console.print("[yellow]Pozdrav! Kronos se vraća u san...[/]")
+            break
+        
+        if not query.strip():
+            continue
+            
+        with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
+            # Probajmo detektirati projekt iz samog upita (pametna pretraga)
+            target_project = None
+            if "matematika" in query.lower(): target_project = "matematikapro"
+            elif "kronos" in query.lower(): target_project = "kronos"
+            
+            results = oracle.ask(query, project=target_project, limit=3, silent=True)
+
+        if not results:
+            console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
+            continue
+
+        for i, res in enumerate(results):
+            source = os.path.basename(res['metadata'].get('source', 'Nepoznato'))
+            project_tag = res['metadata'].get('project', 'unknown')
+            score = res['score']
+            m_type = res['type']
+            content = res['content']
+            
+            type_color = "green" if "Vector" in m_type else "yellow"
+            
+            panel = Panel(
+                f"{content}\n\n[dim]Projekt: {project_tag} | Izvor: {source} | Score: {score:.2%}[/]",
+                title=f"[{type_color}]{m_type} #{i+1}[/]",
+                border_style=type_color,
+                padding=(1, 2)
+            )
+            console.print(panel)
 
 @app.command()
 def stats():

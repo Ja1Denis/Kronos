@@ -16,7 +16,7 @@ class Oracle:
         if not root_path: root_path = "."
         self.librarian = Librarian(root_path)
 
-    def ask(self, query, limit=5, silent=False):
+    def ask(self, query, project=None, limit=5, silent=False):
         """
         Postavlja pitanje Kronosu (Hibridna pretraga).
         Kombinira:
@@ -27,17 +27,20 @@ class Oracle:
         stemmed_query = stem_text(query, mode="aggressive")
         
         if not silent:
-            print(f"{Fore.MAGENTA}🔮 Oracle traži odgovor na: '{query}'{Style.RESET_ALL}")
-            print(f"{Fore.MAGENTA}   (Stemmed: {stemmed_query}){Style.RESET_ALL}")
+            project_info = f" na projektu [bold cyan]{project}[/]" if project else ""
+            print(f"{Fore.MAGENTA}🔮 Oracle traži odgovor{project_info} na: '{query}'{Style.RESET_ALL}")
         
         # 1. Vektorska pretraga
+        where_filter = {"project": project} if project else None
+        
         vector_results = self.collection.query(
             query_texts=[query],
-            n_results=limit
+            n_results=limit,
+            where=where_filter
         )
         
         # 2. Keyword pretraga (FTS)
-        fts_results = self.librarian.search_fts(stemmed_query, limit=limit)
+        fts_results = self.librarian.search_fts(stemmed_query, project=project, limit=limit)
         
         # 3. Kombinacija rezultata (Deduplikacija)
         final_results = []
@@ -62,10 +65,12 @@ class Oracle:
         # Dodaj FTS rezultate
         for path, content in fts_results:
             if content not in seen_contents:
+                # FTS results in our schema now include project info, but search_fts returns (path, content)
+                # We could update search_fts to return project too, or just use what we have.
                 final_results.append({
                     "content": content,
-                    "metadata": {"source": path},
-                    "score": 0.0, # FTS nema direktno usporediv score s vektorima
+                    "metadata": {"source": path}, 
+                    "score": 0.0, 
                     "type": "Keyword 🗝️"
                 })
                 seen_contents.add(content)

@@ -1,8 +1,9 @@
 param (
-    [string]$Command,
-    [string]$Param1,
-    [switch]$Recursive,
-    [int]$Limit = 5
+    [string]$Command = "stats",
+    [string]$Param1 = ".",
+    [int]$Limit = 5,
+    [string]$Project = "",
+    [switch]$Recursive
 )
 
 # Aktiviraj venv
@@ -23,10 +24,18 @@ if ($Command -eq "ingest") {
     python src/main.py @KronosArgs
 }
 elseif ($Command -eq "ask") {
-    python src/main.py ask "$Param1" --limit $Limit
+    if ($Project) {
+        python src/main.py ask "$Param1" --limit $Limit --project "$Project"
+    }
+    else {
+        python src/main.py ask "$Param1" --limit $Limit
+    }
 }
 elseif ($Command -eq "watch") {
     python src/main.py watch "$Param1"
+}
+elseif ($Command -eq "chat") {
+    python src/main.py chat
 }
 elseif ($Command -eq "stats") {
     python src/main.py stats
