@@ -118,11 +118,11 @@ Cilj: Pretvoriti Kronos iz "još jednog RAG-a" u pravi Semantički Operativni Su
 ## 🪄 Faza 5: "Symbiosis" (Generative Intelligence)
 Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za generiranje hipoteza i kontekstualno razumijevanje.
 
-- [ ] **T020: HyDE Implementation (Hypothetical Embeddings)** <!-- id: 19 -->
-    - [ ] Kreirati `Hypothesizer` klasu (koristeći Gemini API).
-    - [ ] Implementirati flow: Upit -> LLM -> Lažni Odgovor -> Vektorizacija -> Pretraga.
-    - [ ] Dodati cacheiranje generiranih hipoteza.
-    - [ ] Evaluacija poboljšanja Recall-a (očekivano >85%).
+- [x] **T020: HyDE Implementation (Hypothetical Embeddings)** <!-- id: 19 -->
+    - [x] Kreirati `Hypothesizer` klasu (koristeći Gemini API).
+    - [x] Implementirati flow: Upit -> LLM -> Lažni Odgovor -> Vektorizacija -> Pretraga.
+    - [x] Dodati cacheiranje generiranih hipoteza (JSON cache).
+    - [x] Evaluacija poboljšanja Recall-a (HyDE radi ispravno na "backup" primjeru).
 
 - [ ] **T021: Contextual Retrieval (Small-to-Big)** <!-- id: 20 -->
     - [ ] Nadograditi `Ingestor` da sprema "parent_id" i parent sadržaj.

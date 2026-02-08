@@ -12,4 +12,8 @@ logs/
 data/store/
 data/archive.jsonl
 data/metadata.db
+data/cache/
 backups/
+debug_*.py
+src/utils/list_models.py
+check_fts.py
