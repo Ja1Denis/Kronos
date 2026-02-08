@@ -124,10 +124,10 @@ Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za gen
     - [x] Dodati cacheiranje generiranih hipoteza (JSON cache).
     - [x] Evaluacija poboljšanja Recall-a (HyDE radi ispravno na "backup" primjeru).
 
-- [ ] **T021: Contextual Retrieval (Small-to-Big)** <!-- id: 20 -->
-    - [ ] Nadograditi `Ingestor` da sprema "parent_id" i parent sadržaj.
-    - [ ] Implementirati pretragu koja pronalazi male chunkove, ali vraća prošireni kontekst (rečenica -> paragraf).
-    - [ ] Smanjiti halucinacije pružanjem boljeg konteksta.
+- [x] **T021: Contextual Retrieval (Small-to-Big)** <!-- id: 20 -->
+    - [x] Implementirati `Contextualizer` modul za proširenje konteksta.
+    - [x] Integrirati u `Oracle` za top rezultate.
+    - [x] Koristiti file-reading metodu umjesto reindeksiranja (efikasnije).
 
 - [ ] **T022: Query Expansion & Multi-Search** <!-- id: 21 -->
     - [ ] Koristiti LLM za generiranje 3-5 varijacija korisničkog upita.

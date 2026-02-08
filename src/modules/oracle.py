@@ -23,6 +23,14 @@ class Oracle:
         except Exception as e:
             print(f"Warning: Ne mogu učitati Hypothesizer: {e}")
             self.hypothesizer = None
+            
+        # Lazy load za Contextualizer
+        try:
+            from src.modules.contextualizer import Contextualizer
+            self.contextualizer = Contextualizer()
+        except Exception as e:
+            print(f"Warning: Ne mogu učitati Contextualizer: {e}")
+            self.contextualizer = None
 
     def ask(self, query, project=None, limit=5, silent=False, hyde=False):
         """
@@ -106,6 +114,18 @@ class Oracle:
         # Sortiraj po finalnom scoru
         all_chunks.sort(key=lambda x: x["final_score"], reverse=True)
 
+        # Contextual Expansion za top rezultate (Samo ako imamo Contextualizer)
+        final_chunks = all_chunks[:limit]
+        if self.contextualizer:
+            for chunk in final_chunks:
+                source = chunk['metadata'].get('source')
+                if source:
+                    # Proširi kontekst (npr. +/- 300 znakova)
+                    extended = self.contextualizer.expand_context(chunk['content'], source, context_window=300)
+                    chunk['expanded_content'] = extended
+                else:
+                    chunk['expanded_content'] = chunk['content']
+
         return {
             "entities": [
                 {
@@ -118,10 +138,11 @@ class Oracle:
             ],
             "chunks": [
                 {
-                    "content": c["content"],
+                    "content": c.get("expanded_content", c["content"]), # Vrati prošireni sadržaj ako postoji
+                    "original_content": c["content"],
                     "metadata": c["metadata"],
                     "score": c["final_score"],
                     "method": c["method"]
-                } for c in all_chunks[:limit]
+                } for c in final_chunks
             ]
         }
