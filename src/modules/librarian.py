@@ -408,6 +408,19 @@ class Librarian:
         conn.close()
         return stats
 
+    def get_random_chunks(self, limit=50):
+        """
+        Dohvaća nasumične chunkove iz baze (za analizu tema).
+        """
+        try:
+            with sqlite3.connect(self.meta_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT content FROM knowledge_fts ORDER BY RANDOM() LIMIT ?", (limit,))
+                return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"Error fetching random chunks: {e}")
+            return []
+
     def wipe_all(self, keep_archive=False):
         """Briše sve lokalne podatke."""
         # 1. Obriši SQLite podatke

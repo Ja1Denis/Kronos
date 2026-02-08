@@ -9,6 +9,7 @@ Projekt je sada duboko u **Fazi 5 (Symbiosis)** s fokusom na generativnu intelig
 - **Contextual Retrieval**: Dodan `Contextualizer` modul za "Small-to-Big" dohvaćanje sadržaja (čitanje +/- 300 znakova oko chunka iz izvorne datoteke).
 - **Query Expansion**: Implementiran mehanizam za generiranje varijacija upita i RRF (Reciprocal Rank Fusion) za spajanje rezultata.
 - **Benchmark**: Prosječni Recall@5 podignut na **72.5%** (prije 70.5%) uz minimalni utjecaj na latenciju (~376ms).
+- **Semantic Clustering**: Implementiran `Curator` agent (T023) koji analizira uzorke, identificira teme i automatski tagira relevantne zapise.
 
 ### 04.02.2026. - Početak Faze 5 (Symbiosis)
 
@@ -20,9 +21,8 @@ Projekt je sada duboko u **Fazi 5 (Symbiosis)** s fokusom na generativnu intelig
 - **Benchmark Suite**: Sustav za mjerenje točnosti (70.5% Recall@5).
 
 ### 🚧 Trenutni Fokus (Faza 5):
-- **Semantic Clustering**: Automatsko grupiranje sličnih tema.
-- **Knowledge Graph**: Povezivanje entiteta u graf.
-- **Deep Research**: Mogućnost generiranja složenih izvještaja.
+- **Knowledge Graph**: Vizualizacija povezivanja entiteta.
+- **Deep Research**: Generiranje složenih izvještaja.
 
 ### 📊 Statistika Baze:
 - **Indeksirano datoteka**: ~2400 (uključujući testne projekte)

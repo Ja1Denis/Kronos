@@ -116,6 +116,16 @@ def ask(
             print("-" * 50)
 
 @app.command()
+def analyze():
+    """
+    Pokreće semantičku analizu i klasteriranje sadržaja (Auto-Tagging).
+    Identificira glavne teme u projektu i označava relevantne dijelove.
+    """
+    from src.modules.curator import Curator
+    curator = Curator()
+    curator.run_clustering_pipeline()
+
+@app.command()
 def save(
     content: str = typer.Argument(..., help="Sadržaj koji želiš spremiti"),
     etype: Optional[str] = typer.Option(None, "--as", "-a", help="Tip zapisa (decision, fact, task)"),

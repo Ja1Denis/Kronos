@@ -134,7 +134,8 @@ Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za gen
     - [x] Ažurirati `Oracle.ask` za multi-query retrieval.
     - [x] Implementirati RRF (Reciprocal Rank Fusion) za spajanje rezultata.
 
-- [ ] **T023: Semantic Clustering & Auto-Tagging** <!-- id: 22 -->
-    - [ ] Automatsko grupiranje sličnih chunkova (Topic Modeling).
-    - [ ] Auto-generiranje tagova za nove dokumente.
+- [x] **T023: Semantic Clustering & Auto-Tagging** <!-- id: 22 -->
+    - [x] Automatsko pronalaženje imena tema (LLM Topic Discovery).
+    - [x] Auto-tagging relevantnih chunkova (LLM/Vector match).
+    - [x] Korisnička CLI naredba `analyze`.
     - [ ] Vizualizacija mapa znanja (Knowledge Graph basic).
