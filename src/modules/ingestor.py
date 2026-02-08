@@ -1,10 +1,10 @@
 import os
 import glob
-from utils.logger import logger
-from utils.stemmer import stem_text
-from modules.librarian import Librarian
-from modules.oracle import Oracle
-from modules.extractor import Extractor
+from src.utils.logger import logger
+from src.utils.stemmer import stem_text
+from src.modules.librarian import Librarian
+from src.modules.oracle import Oracle
+from src.modules.extractor import Extractor
 
 class Ingestor:
     def __init__(self, chunk_size=1000, db_path="data"):

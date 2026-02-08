@@ -9,12 +9,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from rich.theme import Theme
 from rich import print as rprint
 
-# Dodaj putanju za module
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from modules.ingestor import Ingestor
-from modules.oracle import Oracle
-from modules.librarian import Librarian
+from src.modules.ingestor import Ingestor
+from src.modules.oracle import Oracle
+from src.modules.librarian import Librarian
 
 # Tema boja (Cyberpunk vibe)
 custom_theme = Theme({
@@ -112,6 +109,20 @@ def ask(
         )
         console.print(panel)
         console.print("")
+
+@app.command()
+def watch(
+    path: str = typer.Argument(".", help="Putanja za nadzor"),
+    recursive: bool = typer.Option(True, "--recursive", "-r", help="Rekurzivni nadzor")
+):
+    """
+    Pokreće Daemon mode koji automatski pronalazi promjene u tekstovima.
+    """
+    from src.modules.watcher import Watcher
+    console.print(Panel(f"[bold accent]Kronos Watcher (Daemon)[/]\n[info]Pratim promjene u: {path}[/]", border_style="accent"))
+    
+    watcher = Watcher(path=path, recursive=recursive)
+    watcher.run()
 
 @app.command()
 def stats():

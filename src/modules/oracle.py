@@ -10,7 +10,7 @@ class Oracle:
         
         # Inicijaliziramo Librarian-a za FTS pretragu
         import os
-        from modules.librarian import Librarian
+        from src.modules.librarian import Librarian
         # Pretpostavljamo da je db_path = root/store, pa je root = dirname(db_path)
         root_path = os.path.dirname(db_path) 
         if not root_path: root_path = "."
@@ -23,7 +23,7 @@ class Oracle:
         1. Vektorsku pretragu (ChromaDB - ONNX)
         2. Keyword pretragu (SQLite FTS5 - BM25)
         """
-        from utils.stemmer import stem_text
+        from src.utils.stemmer import stem_text
         stemmed_query = stem_text(query, mode="aggressive")
         
         if not silent:

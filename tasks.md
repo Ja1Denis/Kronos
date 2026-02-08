@@ -44,3 +44,4 @@ Cilj: Implementirati "Kronoraising" arhitekturu.
     - [x] Implementirati FastAPI server.
     - [x] Dodati REST endpointe (/ingest, /query, /stats).
     - [x] Omogućiti JSON output za AI agente.
+    - [x] Implementirati File Watcher za automatsko reindeksiranje.

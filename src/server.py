@@ -4,12 +4,9 @@ from typing import List, Optional, Dict, Any
 import os
 import sys
 
-# Dodaj putanju za module
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from modules.ingestor import Ingestor
-from modules.oracle import Oracle
-from modules.librarian import Librarian
+from src.modules.ingestor import Ingestor
+from src.modules.oracle import Oracle
+from src.modules.librarian import Librarian
 
 app = FastAPI(title="Kronos API", description="Semantička Memorija za AI Agente", version="0.2.0")
 
@@ -109,6 +106,20 @@ def wipe_memory():
         return {"status": "success", "message": "Memorija je obrisana."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.on_event("startup")
+def startup_event():
+    """Pokreće watcher u pozadini pri startu servera."""
+    import threading
+    from src.modules.watcher import Watcher
+    
+    def run_watcher():
+        watcher = Watcher(path="docs") # Defaultno prati docs folder
+        watcher.run()
+        
+    thread = threading.Thread(target=run_watcher, daemon=True)
+    thread.start()
+    print("🚀 Background Watcher pokrenut na 'docs' folderu.")
 
 if __name__ == "__main__":
     import uvicorn

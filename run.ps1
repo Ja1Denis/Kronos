@@ -22,6 +22,9 @@ if ($Command -eq "ingest") {
 elseif ($Command -eq "ask") {
     python src/main.py ask "$Param1" --limit $Limit
 }
+elseif ($Command -eq "watch") {
+    python src/main.py watch "$Param1"
+}
 elseif ($Command -eq "stats") {
     python src/main.py stats
 }
