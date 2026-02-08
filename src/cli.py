@@ -3,8 +3,8 @@ import os
 import sys
 from typing import Optional
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.theme import Theme
 from rich import print as rprint
@@ -29,31 +29,18 @@ app = typer.Typer(help="Kronos: Semantička Memorija za AI Agente", add_completi
 @app.command()
 def ingest(
     path: str = typer.Argument(..., help="Putanja do direktorija ili datoteke"),
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Ime projekta"),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Rekurzivno pretraživanje")
 ):
     """
     Učitava dokumente i stvara semantičku memoriju.
     """
-    console.print(Panel(f"[bold accent]Kronos Ingestor[/] v0.1\n[info]Učitavam iz: {path}[/]", border_style="accent"))
+    console.print(Panel(f"[bold accent]Kronos Ingestor[/] v1.1\n[info]Učitavam iz: {path}[/]", border_style="accent"))
 
     ingestor = Ingestor()
     
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(bar_width=None),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        
-        task = progress.add_task("[cyan]Skaniram datoteke...", total=None)
-        files = ingestor._scan_files(path, recursive)
-        progress.update(task, total=len(files), description=f"[cyan]Obrađujem {len(files)} datoteka...")
-        
-        for file_path in files:
-            progress.console.print(f" [dim]→ {os.path.basename(file_path)}[/]")
-            ingestor._process_file(file_path, silent=True)
-            progress.advance(task)
+    # Ako projekt nije zadan, Ingestor će ga sam detektirati iz putanje u .run()
+    ingestor.run(path, project_name=project, recursive=recursive, silent=False)
 
     # Prikaži statistiku nakon unosa
     stats = Librarian().get_stats()
@@ -82,8 +69,8 @@ def ask(
     """
     oracle = Oracle()
     
-    with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-        results = oracle.ask(query, project=project, limit=limit, silent=True)
+    # with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
+    results = oracle.ask(query, project=project, limit=limit, silent=True)
 
     if not results["entities"] and not results["chunks"]:
         console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
@@ -121,18 +108,14 @@ def ask(
             method = res['method']
             score = res.get('score', 0)
             content = res['content']
+            project_name = res['metadata'].get('project', 'unknown')
             
-            method_color = "green" if "Vector" in method else "yellow"
-            proj_tag = f"[[dim]{res['metadata'].get('project', 'unknown')}[/]] "
-            
-            panel_content = f"{content}\n\n[dim]Izvor: {source_name} | Metoda: {method} {f'(Score: {score:.2%})' if score > 0 else ''}[/]"
-            panel = Panel(
-            panel_content,
-            title=f"{proj_tag}[{method_color}]Citat #{i+1}[/]",
-            border_style=method_color,
-            padding=(1, 1)
-        )
-        console.print(panel)
+            # Jednostavan ispis umjesto Panel-a
+            print(f"\n--- Citat #{i+1} [{project_name}] ---")
+            print(f"Izvor: {source_name}")
+            print(f"Metoda: {method} (Score: {score:.2%})")
+            print(content[:500])  # Ograniči na 500 znakova
+            print("-" * 50)
 
 @app.command()
 def save(
@@ -196,36 +179,43 @@ def chat():
             continue
             
         with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
-            # Probajmo detektirati projekt iz samog upita (pametna pretraga)
+            # Poboljšana detekcija projekta iz upita
             target_project = None
-            if "matematika" in query.lower(): target_project = "matematikapro"
-            elif "kronos" in query.lower(): target_project = "kronos"
+            q_lower = query.lower()
             
+            # Dohvati listu svih projekata za pametnije uparivanje
+            all_projs = []
+            try:
+                all_projs = librarian.get_project_stats().keys()
+                for p in all_projs:
+                    if p and p.lower() in q_lower:
+                        target_project = p
+                        break
+            except:
+                pass # Ako ne možemo dohvatiti projekte, nastavi bez toga
+            
+            # Prvi pokušaj (s projektom ako je detektiran)
             results = oracle.ask(query, project=target_project, limit=3, silent=True)
+            
+            # FALLBACK: Ako nema rezultata, pokušaj bez filtera projekta
+            if not results["entities"] and not results["chunks"] and target_project:
+                results = oracle.ask(query, project=None, limit=3, silent=True)
+                target_project = None # Resetiraj za prikaz
 
         if not results["entities"] and not results["chunks"]:
             console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
             continue
 
-        # Kratki prikaz u chat modu (prvi entitet ili prvi chunk)
+        # Kratki prikaz u chat modu
         if results["entities"]:
             ent = results["entities"][0]
-            ent_panel = Panel(
-                f"[bold cyan]{ent['type']}:[/] {ent['content']}",
-                title=f"[dim]{ent['metadata'].get('project')}[/]",
-                border_style="accent"
-            )
-            console.print(ent_panel)
+            print(f"\n[{ent['metadata'].get('project', 'unknown')}] {ent['type']}: {ent['content']}")
         
         if results["chunks"]:
             chunk = results["chunks"][0]
             source = os.path.basename(chunk['metadata'].get('source', 'Nepoznato'))
-            chunk_panel = Panel(
-                f"{chunk['content'][:300]}...",
-                title=f"[dim]Evidence: {source}[/]",
-                border_style="green"
-            )
-            console.print(chunk_panel)
+            print(f"\n📖 Iz dokumenta '{source}':")
+            print(chunk['content'][:400])
 
 @app.command()
 def stats():

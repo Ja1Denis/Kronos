@@ -129,21 +129,28 @@ class Librarian:
         
         try:
             if project:
-                cursor.execute('''
-                    SELECT path, content 
-                    FROM knowledge_fts 
-                    WHERE knowledge_fts MATCH ? AND project = ?
-                    ORDER BY rank 
-                    LIMIT ?
-                ''', (query_stemmed, project, limit))
-            else:
+                # FTS5 strukturirani upit: project:"ime" AND stemmed_content:"upit"
+                # Osiguravamo se da tražimo po projektu I sadržaju
+                fts_query = f'project:"{project}" AND stemmed_content:"{query_stemmed}"'
+                
                 cursor.execute('''
                     SELECT path, content 
                     FROM knowledge_fts 
                     WHERE knowledge_fts MATCH ? 
                     ORDER BY rank 
                     LIMIT ?
-                ''', (query_stemmed, limit))
+                ''', (fts_query, limit))
+            else:
+                # Traži samo po stemiranom sadržaju
+                fts_query = f'stemmed_content:"{query_stemmed}"'
+                cursor.execute('''
+                    SELECT path, content 
+                    FROM knowledge_fts 
+                    WHERE knowledge_fts MATCH ? 
+                    ORDER BY rank 
+                    LIMIT ?
+                ''', (fts_query, limit))
+                
             results = cursor.fetchall()
         except Exception as e:
             print(f"{Fore.RED}Greška pri FTS pretrazi: {e}{Style.RESET_ALL}")

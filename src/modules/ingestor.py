@@ -16,15 +16,16 @@ class Ingestor:
         if not os.path.exists(os.path.join(db_path, "archive.jsonl")):
             logger.warning("🚧 Kreiram novu arhivu...")
 
-    def run(self, path, recursive=False, silent=False):
+    def run(self, path, project_name=None, recursive=False, silent=False):
         """
         Glavna metoda za pokretanje ingestije.
         """
-        # Detektiraj ime projekta iz zadnjeg foldera u putanji
-        full_path = os.path.abspath(path)
-        project_name = os.path.basename(full_path)
-        if not project_name: # Slučaj ako je path npr. "C:/"
-            project_name = "default"
+        # Detektiraj ime projekta ako nije zadan
+        if not project_name:
+            full_path = os.path.abspath(path)
+            project_name = os.path.basename(full_path)
+            if not project_name: # Slučaj ako je path npr. "C:/"
+                project_name = "default"
 
         if not silent:
             logger.info(f"Pokrećem Ingestora na projektu [bold cyan]{project_name}[/] (putanja: {path})")

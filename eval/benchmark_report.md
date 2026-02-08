@@ -1,21 +1,21 @@
 # Kronos Benchmark Report
 
-Datum: 2026-02-08 15:12:21
+Datum: 2026-02-08 18:07:39
 
 ## Sažetak
-- **Prosječni Recall@5:** 0.00%
-- **Prosječna Latencija:** 286.8 ms
+- **Prosječni Recall@5:** 70.50%
+- **Prosječna Latencija:** 583.6 ms
 
 ## Detaljni Rezultati
 | Upit | Recall | Latencija (ms) | Entiteti |
 | :--- | :---: | :---: | :---: |
-| Što je Librarian? | 0% | 332.3 | 0 |
-| Kako radi Oracle? | 0% | 275.0 | 0 |
-| Što radi Ingestor? | 0% | 248.0 | 0 |
-| Tko su članovi tima? | 0% | 256.4 | 0 |
-| Što je Temporal Truth? | 0% | 371.6 | 0 |
-| Kako se radi backup? | 0% | 320.0 | 0 |
-| Što je MCP? | 0% | 254.2 | 0 |
-| Kako radi Watcher? | 0% | 241.6 | 0 |
-| Što je Extractor? | 0% | 283.1 | 0 |
-| Kako radi rebuild? | 0% | 285.9 | 0 |
+| Što je Librarian? | 80% | 741.1 | 0 |
+| Kako radi Oracle? | 100% | 626.8 | 0 |
+| Što radi Ingestor? | 60% | 656.4 | 0 |
+| Tko su članovi tima? | 60% | 673.2 | 0 |
+| Što je Temporal Truth? | 75% | 517.8 | 0 |
+| Kako se radi backup? | 50% | 533.9 | 0 |
+| Što je MCP? | 100% | 515.1 | 0 |
+| Kako radi Watcher? | 25% | 531.0 | 0 |
+| Što je Extractor? | 80% | 530.3 | 0 |
+| Kako radi rebuild? | 75% | 510.8 | 0 |
