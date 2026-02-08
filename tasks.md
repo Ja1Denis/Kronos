@@ -55,15 +55,15 @@ Cilj: Implementirati "Kronoraising" arhitekturu.
 ## 🚀 Faza 3: "God Mode" (Advanced Features)
 Cilj: Pretvoriti Kronosa u aktivnog sugovornika i alat za upravljanje znanjem.
 
-- [ ] **T010: Temporal Truth (Vrijeme i Odluke)** <!-- id: 9 -->
-    - [ ] Proširiti shemu za `valid_from`, `valid_to`, `superseded_by`.
-    - [ ] Implementirati logiku za detekciju kontradikcija.
+- [x] **T010: Temporal Truth (Vrijeme i Odluke)** <!-- id: 9 -->
+    - [x] Proširiti shemu za `valid_from`, `valid_to`, `superseded_by`.
+    - [x] Implementirati logiku za detekciju kontradikcija (Foundations).
     - [ ] API za "ratifikaciju" odluka.
 
-- [ ] **T011: Robustness & Safety** <!-- id: 10 -->
-    - [ ] Implementirati **Debounce** za watcher.
+- [x] **T011: Robustness & Safety** <!-- id: 10 -->
+    - [x] Implementirati **Debounce** za watcher.
     - [ ] Dodati **Backup** komandu (`kronos backup`).
 
-- [ ] **T012: Connectivity (MCP)** <!-- id: 11 -->
-    - [ ] Implementirati **Model Context Protocol (MCP)** server.
-    - [ ] Omogućiti korištenje Kronosa kao alata u Claude/Gemini desktop aplikacijama.
+- [x] **T012: Connectivity (MCP)** <!-- id: 11 -->
+    - [x] Implementirati **Model Context Protocol (MCP)** server.
+    - [x] Omogućiti korištenje Kronosa kao alata u Claude/Gemini desktop aplikacijama.

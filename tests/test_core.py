@@ -26,7 +26,9 @@ Odluka: Koristit ćemo FastAPI.
     data = extractor.extract(text)
     assert "Sustav se sporo pokreće." in data["problems"]
     assert "Dodati indeksiranje u pozadini." in data["solutions"]
-    assert "Koristit ćemo FastAPI." in data["decisions"]
+    # Odluke su sada dict format s 'content' ključem
+    assert len(data["decisions"]) >= 1
+    assert "FastAPI" in data["decisions"][0]["content"]
 
 def test_extractor_tasks():
     extractor = Extractor()

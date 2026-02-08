@@ -5,24 +5,45 @@ from watchdog.events import FileSystemEventHandler
 from src.modules.ingestor import Ingestor
 from src.utils.logger import logger
 
-class KronosHandler(FileSystemEventHandler):
-    """Handler koji reagira na promjene u datotečnom sustavu."""
+from threading import Timer
+
+class DebouncedEventHandler(FileSystemEventHandler):
+    """Handler koji koristi debounce tehniku za stabilnije praćenje promjena."""
     
-    def __init__(self, ingestor: Ingestor):
+    def __init__(self, ingestor, debounce_interval=2.0):
         self.ingestor = ingestor
+        self.debounce_interval = debounce_interval
+        self.timers = {}
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith('.md'):
-            logger.info(f"🔄 Datoteka promijenjena: {os.path.basename(event.src_path)}")
-            # Kratka pauza da se osigura da je file sistem završio pisanje
-            time.sleep(0.5)
-            self.ingestor._process_file(event.src_path, silent=False)
+            self._schedule_processing(event.src_path)
 
     def on_created(self, event):
         if not event.is_directory and event.src_path.endswith('.md'):
-            logger.info(f"🆕 Nova datoteka: {os.path.basename(event.src_path)}")
-            time.sleep(0.5)
-            self.ingestor._process_file(event.src_path, silent=False)
+            self._schedule_processing(event.src_path)
+
+    def _schedule_processing(self, file_path):
+        """Zadaje zadatak s odgodom. Ako se dogodi novi event, resetira timer."""
+        if file_path in self.timers:
+            self.timers[file_path].cancel()
+        
+        logger.info(f"⏳ Detektirane promjene na {os.path.basename(file_path)}, čekam stabilizaciju...")
+        
+        timer = Timer(self.debounce_interval, self._process_file, args=[file_path])
+        self.timers[file_path] = timer
+        timer.start()
+
+    def _process_file(self, file_path):
+        """Callback funkcija koja se izvršava nakon isteka timera."""
+        if file_path in self.timers:
+            del self.timers[file_path]
+            
+        logger.info(f"🔄 Procesiram: {os.path.basename(file_path)}")
+        try:
+            self.ingestor._process_file(file_path, silent=False)
+        except Exception as e:
+            logger.error(f"Greška tijekom procesiranja {file_path}: {e}")
 
 class Watcher:
     """Glavna klasa za nadzor foldera."""
@@ -31,7 +52,7 @@ class Watcher:
         self.path = path
         self.recursive = recursive
         self.ingestor = Ingestor()
-        self.event_handler = KronosHandler(self.ingestor)
+        self.event_handler = DebouncedEventHandler(self.ingestor)
         self.observer = Observer()
 
     def run(self):

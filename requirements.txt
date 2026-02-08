@@ -9,6 +9,7 @@ sentence-transformers>=2.2.0
 sqlite-utils
 langchain
 colorama
+mcp>=1.0.0
 tqdm
 openai
 # pytest httpx are usually for dev but keep them if needed

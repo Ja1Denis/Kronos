@@ -32,10 +32,11 @@ def test_env(tmp_path):
 def test_watcher_detect_file(test_env):
     watch_dir, data_dir, ingestor = test_env
     
-    from src.modules.watcher import KronosHandler
+    from src.modules.watcher import DebouncedEventHandler
     from watchdog.observers import Observer
     
-    handler = KronosHandler(ingestor)
+    # Koristimo kraći debounce interval za testove
+    handler = DebouncedEventHandler(ingestor, debounce_interval=0.5)
     observer = Observer()
     observer.schedule(handler, watch_dir, recursive=False)
     observer.start()
@@ -46,8 +47,8 @@ def test_watcher_detect_file(test_env):
         with open(test_file, "w", encoding="utf-8") as f:
             f.write("# Test Title\nThis is a test content.")
             
-        # Give some time for watcher and processing
-        time.sleep(2)
+        # Give some time for watcher and processing (debounce + processing)
+        time.sleep(3)
         
         # Check if indexed in SQLite FTS
         db_path = os.path.join(data_dir, "metadata.db")

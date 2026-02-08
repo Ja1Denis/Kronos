@@ -198,6 +198,24 @@ def stats():
     console.print(table)
 
 @app.command()
+def mcp():
+    """
+    Pokreće Kronos kao MCP (Model Context Protocol) server.
+    
+    Ovaj mod omogućuje integraciju s Claude Desktop, Gemini CLI i drugim MCP klijentima.
+    Server koristi stdio transport.
+    """
+    console.print(Panel(
+        "[bold accent]Kronos MCP Server[/]\n"
+        "[info]Pokrećem Model Context Protocol server...[/]\n\n"
+        "[dim]Alati: kronos_search, kronos_stats, kronos_decisions, kronos_ingest[/]",
+        border_style="accent"
+    ))
+    
+    from src.mcp_server import main as mcp_main
+    mcp_main()
+
+@app.command()
 def wipe():
     """
     Briše svu memoriju i resetira bazu.

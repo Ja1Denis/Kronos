@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "kronos": {
+            "command": "python",
+            "args": [
+                "-m",
+                "src.mcp_server"
+            ],
+            "cwd": "E:\\G\\GeminiCLI\\ai-test-project\\kronos"
+        }
+    }
+}

@@ -56,18 +56,30 @@ class Librarian:
                 type TEXT, -- 'problem', 'solution', 'decision', 'task'
                 content TEXT,
                 context_preview TEXT,
+                valid_from TEXT,
+                valid_to TEXT,
+                superseded_by TEXT,
                 created_at TEXT
             )
         ''')
         
-        # PROVJERA: Ako tablice postoje ali nemaju 'project' stupac, dodaj ga (migracija)
+        # PROVJERA: Ako tablice postoje ali nemaju nove stupce, dodaj ih (migracija)
         try:
             cursor.execute("ALTER TABLE files ADD COLUMN project TEXT")
-            cursor.execute("ALTER TABLE entities ADD COLUMN project TEXT")
-            # FTS5 tablice se ne mogu lako ALTER-ati, pa ćemo je samo ostaviti
-            # ako je već kreirana bez 'project' polja (ili je drop i re-create)
         except sqlite3.OperationalError:
-            pass # Kolona već postoji
+            pass
+            
+        try:
+            cursor.execute("ALTER TABLE entities ADD COLUMN project TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+        # Migracija za temporalne stupce
+        for col in ['valid_from', 'valid_to', 'superseded_by']:
+            try:
+                cursor.execute(f"ALTER TABLE entities ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass
             
         conn.commit()
         conn.close()
@@ -160,7 +172,20 @@ class Librarian:
                 
             # Spremi odluke
             for item in data.get('decisions', []):
-                insert_entity('decision', item)
+                # Provjera je li item string ili dict (kompatibilnost)
+                if isinstance(item, dict):
+                    content = item.get('content', '')
+                    v_from = item.get('valid_from')
+                    v_to = item.get('valid_to')
+                    sup_by = item.get('superseded_by')
+                    
+                    cursor.execute('''
+                        INSERT INTO entities (file_path, project, type, content, valid_from, valid_to, superseded_by, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (file_path, project, 'decision', content, v_from, v_to, sup_by, timestamp))
+                else:
+                    # Stari format (samo string)
+                    insert_entity('decision', item)
                 
             # Spremi zadatke
             for item in data.get('tasks', []):
@@ -296,3 +321,42 @@ class Librarian:
                 shutil.rmtree(self.store_path)
             except Exception as e:
                 print(f"Greška pri brisanju ChromaDB pohrane: {e}")
+
+    def get_active_decisions(self, project=None, date=None):
+        """
+        Vraća sve odluke aktivne na dani datum.
+        Ako datum nije zadan, koristi se današnji.
+        """
+        if date is None:
+            date = datetime.now().strftime("%Y-%m-%d")
+
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+
+        query = '''
+            SELECT content, valid_from, valid_to, superseded_by, file_path
+            FROM entities
+            WHERE type = 'decision'
+            AND (valid_from IS NULL OR valid_from <= ?)
+            AND (valid_to IS NULL OR valid_to >= ?)
+        '''
+        params = [date, date]
+
+        if project:
+            query += " AND project = ?"
+            params.append(project)
+
+        cursor.execute(query, tuple(params))
+        results = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "content": r[0],
+                "valid_from": r[1],
+                "valid_to": r[2],
+                "superseded_by": r[3],
+                "file_path": r[4]
+            }
+            for r in results
+        ]
