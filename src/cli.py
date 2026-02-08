@@ -142,6 +142,47 @@ def graph(
         curator.generate_graph(project, "text")
 
 @app.command()
+def curate(
+    duplicates: bool = typer.Option(False, "--duplicates", "-d", help="Traži duplikate (Entiteti)"),
+    refine: bool = typer.Option(False, "--refine", "-r", help="Traži strukturu u nestrukturiranom tekstu"),
+):
+    """
+    Održavanje baze znanja: traženje duplikata i rudarenje novih informacija.
+    """
+    from src.modules.curator import Curator
+    curator = Curator()
+    
+    if not duplicates and not refine:
+        console.print("[warning]Odaberi opciju: --duplicates ili --refine[/]")
+        return
+
+    if duplicates:
+        dupes = curator.identify_duplicates()
+        if not dupes:
+            console.print("[success]Nema pronađenih duplikata.[/]")
+        else:
+            console.print(f"\n[bold yellow]⚠️ Pronađeno {len(dupes)} potencijalnih duplikata:[/]")
+            for d in dupes:
+                console.print("\n[bold yellow]----------------------------------------[/]")
+                console.print(f"Original (#{d['original']['id']}): {d['original']['content']}")
+                console.print(f"Kandidat (#{d['duplicate_candidate_id']}): {d['neighbor_content']}")
+                console.print(f"[dim]Udaljenost: {d['distance']:.4f}[/]")
+    
+    if refine:
+        new_items = curator.refine_knowledge()
+        if not new_items:
+            console.print("[info]Nisu pronađene nove informacije za ekstrakciju.[/]")
+        else:
+            console.print(f"\n[bold green]⛏️ Pronađeno {len(new_items)} novih entiteta:[/]")
+            librarian = Librarian()
+            for item in new_items:
+                console.print(f"[bold]{item['type']}:[/] {item['content']}")
+                if typer.confirm(f"Spremi ovaj {item['type']}?", default=True):
+                     lid = librarian.save_entity(item['type'].lower(), item['content'])
+                     console.print(f"[green]Spremljeno (ID: {lid})[/]")
+
+
+@app.command()
 def save(
     content: str = typer.Argument(..., help="Sadržaj koji želiš spremiti"),
     etype: Optional[str] = typer.Option(None, "--as", "-a", help="Tip zapisa (decision, fact, task)"),

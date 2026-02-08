@@ -3,7 +3,10 @@ import random
 from src.modules.librarian import Librarian
 from src.modules.oracle import Oracle
 from src.utils.llm_client import LLMClient
+from src.utils.llm_client import LLMClient
 from colorama import Fore, Style
+import time
+from rich.progress import track
 
 class Curator:
     def __init__(self):
@@ -190,6 +193,116 @@ class Curator:
             lines.append("}")
             return "\n".join(lines)
 
+    def identify_duplicates(self, threshold=0.35):
+        """
+        Pronalazi semantičke duplikate među odlukama i činjenicama.
+        """
+        print(f"{Fore.MAGENTA}🕵️  Curator traži duplikate...{Style.RESET_ALL}")
+        
+        # 1. Dohvati sve odluke
+        decisions = self.librarian.get_decisions(include_superseded=False)
+        candidates = []
+        
+        # 2. Provjeri svaku odluku
+        for dec in track(decisions, description="Skeniranje..."):
+            # Preskoči ako je prekratko
+            if len(dec['content']) < 25: continue
+            
+            # Query vector DB
+            results = self.oracle.collection.query(
+                query_texts=[dec['content']],
+                n_results=2, # Sebe + 1 potencijalni
+                where={"type": "entity"}
+            )
+            
+            if not results['ids']: continue
+            
+            ids = results['ids'][0]
+            metadatas = results['metadatas'][0]
+            distances = results['distances'][0]
+            
+            # Prvi rezultat je (vjerojatno) on sam (dist ~ 0)
+            # Drugi je potencijalni duplikat
+            if len(ids) > 1:
+                neighbor_id = metadatas[1]['entity_id']
+                dist = distances[1]
+                
+                # Ignoriraj ako je isti ID (ponekad Chroma vrati sebe dvaput ako je updatean?)
+                if str(neighbor_id) == str(dec['id']):
+                    continue
+                    
+                if dist < threshold:
+                    candidates.append({
+                        "original": dec,
+                        "duplicate_candidate_id": neighbor_id,
+                        "distance": dist,
+                        "neighbor_content": results['documents'][0][1] # Content drugog
+                    })
+        
+        # 3. Analiza s LLM-om (Samo za kandidate)
+        confirmed_duplicates = []
+        for cand in candidates:
+            prompt = f"""Ti si Curator. Analiziraj ove dvije odluke i reci jesu li semantički duplikati (govore istu stvar).
+
+            Odluka A (ID {cand['original']['id']}): "{cand['original']['content']}"
+            Odluka B (ID {cand['duplicate_candidate_id']}): "{cand['neighbor_content']}"
+
+            Jesu li ovo duplikati? Odgovori samo sa DA ili NE.
+            """
+            resp = self.llm.complete(prompt).strip().upper()
+            if "DA" in resp:
+                confirmed_duplicates.append(cand)
+                
+        return confirmed_duplicates
+
+    def refine_knowledge(self, sample_size=20):
+        """
+        Skenira nestrukturirane chunkove i pokušava ekstrahirati nove odluke/činjenice.
+        """
+        print(f"{Fore.MAGENTA}⛏️  Curator kopa za novim znanjem...{Style.RESET_ALL}")
+        
+        # 1. Uzmi nasumične chunkove
+        chunks = self.librarian.get_random_chunks(limit=sample_size)
+        new_entities = []
+        
+        # 2. LLM Ekstrakcija
+        for chunk in track(chunks, description="Analiza teksta..."):
+            prompt = f"""Analiziraj ovaj tekst i izvuci bilo kakvu EKSPLICITNU ODLUKU ili KRITIČNU ČINJENICU.
+            
+            Upute:
+            - Ignoriraj source code primjere (npr. assertEqual, console.log), logove i testne assertions.
+            - Traži rečenice koje definiraju arhitekturu, pravila, tech stack ili ciljeve projekta.
+            - Fokusiraj se na 'ljudske' odluke, ne na implementacijske detalje koda.
+            
+            Ako nema ničeg bitnog, vrati "NEMA".
+            
+            Tekst:
+            "{chunk[:1000]}"
+            
+            Format: TIP: Sadržaj
+            Primjer: DECISION: Koristimo Python 3.11 kao primarni jezik.
+            """
+            
+            resp = self.llm.complete(prompt, model_name="gemini-2.0-flash").strip()
+            
+            if "DECISION:" in resp or "FACT:" in resp:
+                lines = resp.split('\n')
+                for line in lines:
+                    if ":" in line:
+                        etype, content = line.split(':', 1)
+                        etype = etype.strip().upper()
+                        if etype in ['DECISION', 'FACT']:
+                            new_entities.append({
+                                "type": etype,
+                                "content": content.strip(),
+                                "source_chunk": chunk[:50] + "..."
+                            })
+                            
+        return new_entities
+
 if __name__ == "__main__":
     curator = Curator()
-    curator.run_clustering_pipeline()
+    dupes = curator.identify_duplicates()
+    for d in dupes:
+        print(f"DUPLIKAT: #{d['original']['id']} == #{d['duplicate_candidate_id']}")
+
