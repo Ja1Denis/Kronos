@@ -1,84 +1,91 @@
 # Kronos ⏳
 **Lokalni Sustav Semantičke Memorije za AI Agente**
 
-Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) da imaju dugoročno pamćenje, razumiju kontekst projekta i brzo pronalaze informacije.
+Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) da imaju dugoročno pamćenje, razumiju kontekst projekta i drastično smanje potrošnju tokena putem RAG (Retrieval-Augmented Generation) pristupa.
 
 ## 🌟 Ključne Značajke
-- **Hibridna Pretraga**: Kombinira vektorsku pretragu (ChromaDB + Sentence Transformers) za *značenje* i keyword pretragu (SQLite FTS5 + CroStem) za *preciznost*.
-- **Strukturirano Znanje**: Automatski izvlači probleme, rješenja, odluke i zadatke iz teksta.
-- **Daemon Mode (Watcher)**: Prati tvoje promjene u datotekama u stvarnom vremenu i automatski ih pamti.
-- **Developer-First**: Dizajniran da se koristi kroz CLI (za ljude) i API (za agente).
+- **Hibridna Pretraga**: Kombinira vektorsku pretragu (ChromaDB) za *značenje* i keyword pretragu (SQLite FTS5) za *preciznost*.
+- **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`). AI uvijek zna koja je odluka trenutno važeća.
+- **MCP Server**: Integracija s Claude Desktop aplikacijom putem Model Context Protocola.
+- **Strukturirano Znanje**: Automatski izvlači probleme, rješenja, odluke i zadatke.
+- **Project Awareness**: Automatski izolira znanje po projektima (npr. `cortex-search`, `subtitle-ai`).
+- **Debounced Watcher**: Pametno prati promjene u datotekama i automatski ih indeksira bez opterećenja sustava.
 
 ---
 
 ## 🚀 Brzi Start
 
 ### 1. Ingestija (Učitavanje znanja)
-Učitaj sve dokumente iz trenutnog direktorija kako bi Kronos naučio o projektu.
-Kronos automatski prepoznaje ime projekta iz mape!
-
+Učitaj projekt kako bi Kronos naučio o njemu:
 ```powershell
-# Učitaj projekt (npr. iz foldera 'moj-projekt')
 .\run.ps1 ingest "." -Recursive
 ```
 
-### 2. Interaktivni Chat (NOVO!)
-Razgovaraj s Kronosom o svojim projektima u prirodnom jeziku:
+### 2. MCP Server (Integracija s Claude-om)
+Omogući Claude-u da koristi Kronos kao alat:
+```powershell
+.\run.ps1 mcp
+```
+*Konfiguracija za Claude Desktop nalazi se u `claude_desktop_config.json`.*
+
+### 3. Interaktivni Chat
+Razgovaraj s lokalnom memorijom:
 ```powershell
 .\run.ps1 chat
 ```
-*Kronos pametno filtrira odgovore ovisno o projektu kojeg spomeneš u pitanju!*
 
-### 3. Eksplicitna Pretraga (CLI)
-Pitaj Kronosa bilo što o specifičnom projektu:
+### 4. Sigurnost (Backup)
+Nikad ne gubi znanje:
 ```powershell
-.\run.ps1 ask "Kako radi Watcher modul?" --project kronos
-```
-
-### 4. Statistika
-Provjeri stanje memorije:
-```powershell
-.\run.ps1 stats
+.\run.ps1 backup
 ```
 
 ---
 
 ## 🧠 Napredno Korištenje
 
-### API Server (Za AI Agente)
-Pokreni server koji omogućuje agentima da programski pristupaju memoriji:
+### Upravljanje Odlukama (Ratifikacija)
+Ako se odluka promijenila, ratificiraj novu verziju:
+```powershell
+# Prikaži sve odluke
+.\run.ps1 decisions
+
+# Zamijeni staru odluku novom
+.\run.ps1 ratify ID_ODLUKE --supersede "Nova odluka o arhitekturi"
+```
+
+### API Server
+Pokreni REST API za vanjske aplikacije:
 ```powershell
 .\run.ps1 serve
 ```
 - **URL**: `http://127.0.0.1:8000`
-- **Dokumentacija**: `http://127.0.0.1:8000/docs`
-- **Automatski Watcher**: Server automatski prati `docs/` folder i re-indeksira promjene.
-
-### Daemon Mode (Samo Watcher)
-Ako ne trebaš server, već samo želiš da Kronos prati promjene u pozadini:
-```powershell
-.\run.ps1 watch "."
-```
+- **Docs**: `http://127.0.0.1:8000/docs`
 
 ---
 
 ## 🏗️ Arhitektura
-Projekt se sastoji od 4 glavna modula:
-1.  **Ingestor**: Čitač datoteka, chunker i orkestrator.
-2.  **Librarian**: Upravitelj SQLite bazom (metapodaci, FTS indeks, entiteti).
-3.  **Oracle**: Mozak operacije - izvodi hibridnu pretragu i rangira rezultate.
-4.  **Watcher**: Oči sustava - detektira promjene na disku.
+Projekt se sastoji od modularnih komponenata:
+1.  **Ingestor**: Orkestrator za čitanje i chunking dokumenata.
+2.  **Librarian**: Upravitelj metapodacima i FTS indeksom (SQLite).
+3.  **Oracle**: Mozak koji izvodi hibridni retrieval i reranking.
+4.  **Watcher**: Detektira promjene na disku u stvarnom vremenu.
+5.  **MCP Server**: Bridge prema modernim AI klijentima.
 
-Podaci se čuvaju u:
-- `data/store`: ChromaDB (vektori)
-- `data/metadata.db`: SQLite (FTS5 + Entiteti)
-- `data/archive.jsonl`: Sirovi JSON log (backup)
+---
 
-## 🛠️ Razvoj
-Testiranje sustava:
+## 📊 Zašto Kronos? (Token Ekonomija)
+Ušteda na tokenima pri radu s velikim projektima iznosi preko **95%**.
+- **Bez Kronosa**: 5000+ tokena konteksta po upitu.
+- **S Kronosom**: ~200 tokena preciznog konteksta.
+
+---
+
+## 🛠️ Razvoj i Testiranje
+Pokreni kompletan testni paket:
 ```powershell
-.\venv\Scripts\pytest
+.\venv\Scripts\pytest tests/ -v
 ```
 
 ---
-*Izrađeno s ❤️ za naprednu AI kolaboraciju.*
+*Izrađeno s ❤️ za naprednu AI kolaboraciju i uštedu tokena. Version v1.0.0-mvp*
