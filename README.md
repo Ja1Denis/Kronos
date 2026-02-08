@@ -1,146 +1,74 @@
-# 🧠 Kronos
+# Kronos ⏳
+**Lokalni Sustav Semantičke Memorije za AI Agente**
 
-**Semantički Operativni Sustav za AI Memoriju**
+Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) da imaju dugoročno pamćenje, razumiju kontekst projekta i brzo pronalaze informacije.
 
-Kronos je lokalni sustav za pohranu i semantičko pretraživanje razgovora, dokumentacije i koda. Drastično smanjuje potrošnju tokena (do 97%) i povećava inteligenciju AI agenata kroz strukturiranu memoriju.
-
-![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-purple)
-![License](https://img.shields.io/badge/License-MIT-green)
-
----
-
-## 🚀 Značajke
-
-| Komponenta | Opis |
-|------------|------|
-| **Ingestor** | Čita `.md` datoteke, dijeli ih po Markdown zaglavljima |
-| **Librarian** | SQLite metadata + JSONL backup arhiva |
-| **Oracle** | Semantička pretraga (ChromaDB + ONNX embeddings) |
-| **CroStem** | Hrvatski stemmer za hibridno pretraživanje (WIP) |
+## 🌟 Ključne Značajke
+- **Hibridna Pretraga**: Kombinira vektorsku pretragu (ChromaDB + Sentence Transformers) za *značenje* i keyword pretragu (SQLite FTS5 + CroStem) za *preciznost*.
+- **Strukturirano Znanje**: Automatski izvlači probleme, rješenja, odluke i zadatke iz teksta.
+- **Daemon Mode (Watcher)**: Prati tvoje promjene u datotekama u stvarnom vremenu i automatski ih pamti.
+- **Developer-First**: Dizajniran da se koristi kroz CLI (za ljude) i API (za agente).
 
 ---
 
-## 📦 Instalacija
+## 🚀 Brzi Start
 
+### 1. Ingestija (Učitavanje znanja)
+Učitaj sve dokumente iz trenutnog direktorija kako bi Kronos naučio o projektu:
 ```powershell
-# Kloniraj repozitorij
-git clone https://github.com/Ja1Denis/Kronos.git
-cd Kronos
+.\run.ps1 ingest "." -Recursive
+```
 
-# Pokreni setup (kreira venv i instalira pakete)
-powershell -ExecutionPolicy Bypass -File setup.ps1
+### 2. Postavljanje Pitanja (CLI)
+Pitaj Kronosa bilo što o projektu:
+```powershell
+.\run.ps1 ask "Kako radi Watcher modul?"
+```
+
+### 3. Statistika
+Provjeri stanje memorije:
+```powershell
+.\run.ps1 stats
 ```
 
 ---
 
-## 🛠️ Korištenje
+## 🧠 Napredno Korištenje
 
-### Ingestija dokumenata
+### API Server (Za AI Agente)
+Pokreni server koji omogućuje agentima da programski pristupaju memoriji:
 ```powershell
-# Učitaj sve .md datoteke iz foldera
-.\venv\Scripts\python.exe src/main.py ingest docs --recursive
-```
-
-### Semantička pretraga
-```powershell
-# Postavi pitanje Kronosu
-.\venv\Scripts\python.exe src/main.py query "što je cilj projekta" --limit 5
-```
-
-### Provjera baze
-```powershell
-# Provjeri broj zapisa u ChromaDB
-.\venv\Scripts\python.exe check_db.py
-```
-
-### Server (API Mode)
-```powershell
-# Pokreni FastAPI server za AI agente
 .\run.ps1 serve
 ```
-Kronos će biti dostupan na `http://127.0.0.1:8000`. Dokumentacija na `/docs`.
+- **URL**: `http://127.0.0.1:8000`
+- **Dokumentacija**: `http://127.0.0.1:8000/docs`
+- **Automatski Watcher**: Server automatski prati `docs/` folder i re-indeksira promjene.
+
+### Daemon Mode (Samo Watcher)
+Ako ne trebaš server, već samo želiš da Kronos prati promjene u pozadini:
+```powershell
+.\run.ps1 watch "."
+```
 
 ---
 
 ## 🏗️ Arhitektura
+Projekt se sastoji od 4 glavna modula:
+1.  **Ingestor**: Čitač datoteka, chunker i orkestrator.
+2.  **Librarian**: Upravitelj SQLite bazom (metapodaci, FTS indeks, entiteti).
+3.  **Oracle**: Mozak operacije - izvodi hibridnu pretragu i rangira rezultate.
+4.  **Watcher**: Oči sustava - detektira promjene na disku.
 
-```
-Razgovor → Ingestor → Librarian → Oracle
-                ↓           ↓          ↓
-           Chunking    SQLite DB   ChromaDB
-                         ↓
-                    JSONL Backup
-```
+Podaci se čuvaju u:
+- `data/store`: ChromaDB (vektori)
+- `data/metadata.db`: SQLite (FTS5 + Entiteti)
+- `data/archive.jsonl`: Sirovi JSON log (backup)
 
-### Tri Razine Optimizacije
-
-1. **Laka Razina** - Klasični sažeci + SQLite FTS5 (~70-85% ušteda)
-2. **Srednja Razina** - Hibridna pretraga BM25 + Embeddings (~92-97% ušteda) ✅
-3. **Hardcore Razina** - Kronoraising arhitektura s ekstrakcijom entiteta (WIP)
-
----
-
-## 📊 Ušteda Tokena
-
-| Metoda | Tokeni | Cijena | Vrijeme |
-|--------|--------|--------|---------|
-| Bez optimizacije | 120,000 | $0.60 | 8s |
-| **Kronos** | 800 | $0.004 | 1.2s |
-| **Povećanje** | **150x** | **99%** | ⚡ |
-
----
-
-## 🗂️ Struktura Projekta
-
-```
-kronos/
-├── src/
-│   ├── main.py              # CLI Entry Point
-│   ├── modules/
-│   │   ├── ingestor.py      # Agent Ingestor
-│   │   ├── oracle.py        # Agent Oracle
-│   │   └── librarian.py     # Agent Librarian
-│   └── utils/
-│       └── logger.py        # Logging sustav
-├── data/
-│   ├── store/               # ChromaDB vektorska baza
-│   └── archive.jsonl        # JSONL backup
-├── docs/
-│   ├── vision.md            # Vizija projekta
-│   ├── team.md              # Tim agenata
-│   └── tasks.md             # Plan rada
-└── requirements.txt
+## 🛠️ Razvoj
+Testiranje sustava:
+```powershell
+.\venv\Scripts\pytest
 ```
 
 ---
-
-## 🇭🇷 Hrvatski Jezik
-
-Kronos koristi **CroStem** algoritam za stemiranje hrvatskog jezika:
-- `kuća`, `kući`, `kućom` → `kuć`
-- Podržava ijekavicu, ekavicu i ikavicu
-
----
-
-## 🛣️ Roadmap
-
-- [x] MVP: Ingestor + Oracle + Librarian
-- [x] ChromaDB integracija
-- [x] ONNX embeddings (brzi!)
-- [ ] CroStem integracija (hibridna pretraga)
-- [ ] Extractor Agent (ekstrakcija entiteta)
-- [ ] Daemon mode (server za instant odgovore)
-- [ ] VS Code Extension
-
----
-
-## 📝 Licenca
-
-MIT License - Slobodno koristi, modificiraj i dijeli!
-
----
-
-## 🤝 Autor
-
-Napravljeno s ❤️ za AI budućnost.
+*Izrađeno s ❤️ za naprednu AI kolaboraciju.*

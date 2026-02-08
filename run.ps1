@@ -13,6 +13,9 @@ if (-not (Test-Path $VenvPath)) {
 }
 . $VenvPath
 
+# Postavi PYTHONPATH na trenutni direktorij kako bi 'src' importi radili
+$env:PYTHONPATH = "$PWD"
+
 # Pokreni Python alat Kronos
 if ($Command -eq "ingest") {
     $KronosArgs = @("ingest", "$Param1")
