@@ -119,6 +119,77 @@ class Curator:
         for theme, count in stats.items():
             print(f" - {theme}: {count} chunkova")
 
+    def generate_graph(self, project=None, output_format="text"):
+        """Generira jednostavan graf znanja (projekti -> odluke -> veze)."""
+        decisions = self.librarian.get_decisions(project=project, include_superseded=True)
+        stats = self.librarian.get_project_stats()
+        
+        if output_format == "text":
+            print(f"{Fore.CYAN}🕸️  Knowledge Graph ({len(stats)} projects, {len(decisions)} decisions){Style.RESET_ALL}")
+            for proj in stats.keys():
+                if project and proj != project: continue
+                if proj == "default" and not any(d['project'] == proj for d in decisions): continue
+                
+                print(f"\n📦 {proj}")
+                proj_decisions = [d for d in decisions if d['project'] == proj]
+                if not proj_decisions:
+                    print("   (no structured entities)")
+                    continue
+                    
+                # Sort decisions by ID
+                proj_decisions.sort(key=lambda x: x['id'])
+                
+                for d in proj_decisions:
+                    # Status icon
+                    status = "🔴" if d['superseded_by'] else "🟢"
+                    # Shorten content
+                    content = (d['content'][:60] + '...') if len(d['content']) > 60 else d['content']
+                    print(f"  ├─ {status} #{d['id']}: {content}")
+                    
+                    if d['superseded_by']:
+                        print(f"  │     └─ ➡️ Superseded by: {Fore.YELLOW}{d['superseded_by']}{Style.RESET_ALL}")
+        
+        elif output_format == "dot":
+            # Graphviz DOT format
+            lines = [
+                "digraph KronosKG {",
+                "  rankdir=LR;",
+                "  node [shape=box style=\"rounded,filled\" fontname=\"Arial\"];",
+                "  edge [fontname=\"Arial\" fontsize=10];"
+            ]
+            
+            for proj in stats.keys():
+                if project and proj != project: continue
+                
+                # Cluster for project
+                safe_proj = proj.replace('-', '_').replace(' ', '_')
+                lines.append(f"  subgraph cluster_{safe_proj} {{")
+                lines.append(f"    label = \"{proj}\";")
+                lines.append("    style=filled; color=\"#e6f3ff\";")
+                
+                proj_decisions = [d for d in decisions if d['project'] == proj]
+                for d in proj_decisions:
+                    # Node style
+                    color = "#ffcccc" if d['superseded_by'] else "#ccffcc"
+                    # Escape quotes in label
+                    safe_content = d['content'][:40].replace('"', "'") + "..."
+                    label = f"#{d['id']}\\n{safe_content}"
+                    node_id = f"d{d['id']}"
+                    lines.append(f"    {node_id} [label=\"{label}\" fillcolor=\"{color}\"];")
+                    
+                    # Edge (supersedes)
+                    if d['superseded_by']:
+                        import re
+                        match = re.search(r'#(\d+)', d['superseded_by'])
+                        if match:
+                            target_id = f"d{match.group(1)}"
+                            lines.append(f"    {node_id} -> {target_id} [style=dashed label=\"superseded by\" color=red];")
+                            
+                lines.append("  }")
+            
+            lines.append("}")
+            return "\n".join(lines)
+
 if __name__ == "__main__":
     curator = Curator()
     curator.run_clustering_pipeline()

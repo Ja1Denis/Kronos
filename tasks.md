@@ -138,4 +138,4 @@ Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za gen
     - [x] Automatsko pronalaženje imena tema (LLM Topic Discovery).
     - [x] Auto-tagging relevantnih chunkova (LLM/Vector match).
     - [x] Korisnička CLI naredba `analyze`.
-    - [ ] Vizualizacija mapa znanja (Knowledge Graph basic).
+    - [x] Vizualizacija mapa znanja (Knowledge Graph basic).

@@ -126,6 +126,21 @@ def analyze():
     curator.run_clustering_pipeline()
 
 @app.command()
+def graph(
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Filtriraj po projektu"),
+    fmt: str = typer.Option("text", "--format", "-f", help="Format ispisa: text ili dot")
+):
+    """
+    Generira graf znanja projekta (veze između odluka i modula).
+    """
+    from src.modules.curator import Curator
+    curator = Curator()
+    if fmt == "dot":
+        print(curator.generate_graph(project, "dot"))
+    else:
+        curator.generate_graph(project, "text")
+
+@app.command()
 def save(
     content: str = typer.Argument(..., help="Sadržaj koji želiš spremiti"),
     etype: Optional[str] = typer.Option(None, "--as", "-a", help="Tip zapisa (decision, fact, task)"),
