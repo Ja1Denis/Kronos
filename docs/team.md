@@ -81,3 +81,23 @@ Da bi projekt Kronos uspješno funkcionirao, ne koristimo jednog "monolitnog" ag
     -   Generira **timeline** prikaz evolucije projekta.
     -   Odgovara na pitanja tipa "Kako se X mijenjao?"
 -   **Alati:** Temporal queries, diff algoritmi, vizualizacija vremenske crte.
+
+---
+
+## 🚀 Novi Članovi Tima (Faza 5)
+
+## 10. Agent Hypothesizer (💭 "Sanjalica")
+**Uloga:** Generira hipoteze pomoću LLM-a (Gemini) za poboljšanje pretrage (HyDE algoritam).
+-   **Zadaci:**
+    -   Prima korisnički upit i "izmišlja" potencijalni odgovor.
+    -   Koristi taj odgovor za vektorsku pretragu umjesto samog pitanja.
+    -   Generira varijacije upita za širenje pretrage (Query Expansion).
+-   **Alati:** Gemini API, Prompt Engineering, Caching.
+
+## 11. Agent Contextualizer (🧩 "Kontekstualizator")
+**Uloga:** Osigurava da svaki fragment informacije ima smisao u širem kontekstu.
+-   **Zadaci:**
+    -   Povezuje male chunkove s njihovim nadređenim dokumentima ("Small-to-Big" Retrieval).
+    -   On-the-fly proširuje kontekst ako pretraga vrati prekratak isječak.
+    -   Smanjuje halucinacije osiguravanjem potpunih informacija.
+-   **Alati:** Graph Database concepts, Context Window management.

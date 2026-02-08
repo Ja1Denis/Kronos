@@ -1,28 +1,26 @@
 # Trenutni Status Projekta (Kronos)
 Datum: 2026-02-08
 
-## 🚀 Status: Faza 4 Završena (Evolution)
-Projekt je uspješno prešao iz MVP faze u **Kronos 2.0 (Evolution)**. Implementiran je puni set funkcionalnosti za semantički operativni sustav.
+## 🚀 Status: Faza 5 U Tijeku (Symbiosis)
+Projekt je uspješno završio Fazu 4 (Evolution) i sada ulazi u **Fazu 5 (Symbiosis)**. Fokus je na **generativnoj inteligenciji** i dubljem semantičkom razumijevanju.
 
-### 💎 Ključna Postignuća (Faza 4):
-- **Event Sourcing**: Sav promet znanja se logira u `archive.jsonl`, omogućujući potpuni `rebuild` baze.
-- **3-Stage Hybrid Search**: Retrieval pipeline sada koristi trostupanjski proces (Keyword -> Vector -> Reranking).
-- **Entity-First Retrieval**: Sustav prioritetno vraća strukturirane objekte (odluke, zadatke) ispred običnog teksta.
-- **Temporal History**: Omogućeno praćenje evolucije odluka i vizualizacija timelinea.
-- **Benchmark Suite**: Uveden sustav za mjerenje Recall-a i Latencije.
-- **Multi-Project Dashboard**: Pregled svih indeksiranih projekata na jednom mjestu.
-- **One-Click Launch**: Kreirana Desktop ikona za brzi pristup chatu.
+### 💎 Postignuća Faze 4 (Završeno):
+- **Event Sourcing**: Potpuni integritet podataka kroz `archive.jsonl`.
+- **3-Stage Hybrid Search**: Keyword -> Vector -> Reranking pipeline.
+- **Entity-First Retrieval**: Prioritet strukturiranim objektima (odluke, zadaci).
+- **Temporal History**: Praćenje evolucije odluka.
+- **Benchmark Suite**: Sustav za mjerenje točnosti (70.5% Recall@5).
+
+### 🚧 Trenutni Fokus (Faza 5):
+- **HyDE implementacija**: Korištenje LLM-a za generiranje hipotetskih odgovora radi boljeg vector matcha.
+- **Contextual Retrieval**: Povezivanje malih chunkova s njihovim širim kontekstom ("Small-to-Big" pristup).
+- **Query Expansion**: Automatsko generiranje varijacija upita za pokrivanje različitih terminologija.
 
 ### 📊 Statistika Baze:
 - **Indeksirano datoteka**: ~2400 (uključujući testne projekte)
 - **Ukupno chunkova**: ~14000
-- **Ekstrahirano znanje**: Preko 10,000 entiteta (odluke, zadaci, kodni blokovi).
+- **Ekstrahirano znanje**: Preko 10,000 entiteta.
 
 ### 🛠️ Tehnički Dug / Napomene:
-- Rebuild skripta optimizirana batch transakcijama za SQLite i ChromaDB.
-- Potrebno dodatno fino podešavanje (fine-tuning) reranking algoritma na većim setovima podataka.
-
-## 🔜 Sljedeći Koraci (Faza 5 - Planiranje):
-- **Web UI (Dashboard)**: Prelazak s CLI-a na moderni web dashboard.
-- **Cross-Project Queries**: Mogućnost postavljanja upita koji spajaju znanje iz više projekata.
-- **AI Agent Automation**: Integracija Cron poslova za automatsku "sintezu" znanja.
+- Riješen problem s prikazom `rich` panela na Windows CLI-u (prelazak na `print` za stabilnost).
+- Potrebno implementirati caching za skupe LLM pozive (HyDE).

@@ -1,5 +1,23 @@
 # Development Log - Kronos
 
+## [2026-02-08] - Faza 5 Start: "Symbiosis" Planning
+
+### Kontekst:
+- Kreće implementacija **Generative Intelligence** značajki (HyDE, Query Expansion).
+- Cilj je podići **Recall@5** s trenutnih 70.5% na >85%.
+
+### Promjene (Planirano):
+- **T020: HyDE Implementation**: Integracija Gemini API-ja za generiranje hipotetskih dokumanata prije vektorske pretrage.
+- **T021: Contextual Retrieval**: Poboljšanje `Ingestor`-a da čuva referencu na *parent* dokument (rečenica -> paragraf).
+- **T022: Query Expansion**: Korištenje LLM-a za parafraziranje korisničkog upita u 3-5 varijacija.
+
+### Popravci (Bugfixes):
+- **CLI Rendering**: Zamijenjen `rich.Panel` s običnim `print` ispisom u `ask` i `chat` komandama zbog problema s prikazom na Windows terminalu.
+- **Project Detection**: Poboljšana logika za automatsko prepoznavanje projekta iz upita ("što je cilj *kronosa*?").
+- **Search Fallback**: Implementiran automatski fallback na globalnu pretragu ako specifični projekt ne vrati rezultate.
+
+---
+
 ## [2026-02-08] - Faza 4: "Evolution" Implementation
 
 ### Dodano:

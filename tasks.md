@@ -114,3 +114,27 @@ Cilj: Pretvoriti Kronos iz "još jednog RAG-a" u pravi Semantički Operativni Su
     - [x] CLI komanda `kronos projects` - lista svih projekata s statistikama.
     - [x] `kronos project [ime] --stats` - detalji o pojedinom projektu.
     - [x] Web UI (opcionalno, FastAPI + HTMX) za vizualizaciju znanja.
+
+## 🪄 Faza 5: "Symbiosis" (Generative Intelligence)
+Cilj: Implementirati napredne kognitivne funkcije koristeći LLM (Gemini) za generiranje hipoteza i kontekstualno razumijevanje.
+
+- [ ] **T020: HyDE Implementation (Hypothetical Embeddings)** <!-- id: 19 -->
+    - [ ] Kreirati `Hypothesizer` klasu (koristeći Gemini API).
+    - [ ] Implementirati flow: Upit -> LLM -> Lažni Odgovor -> Vektorizacija -> Pretraga.
+    - [ ] Dodati cacheiranje generiranih hipoteza.
+    - [ ] Evaluacija poboljšanja Recall-a (očekivano >85%).
+
+- [ ] **T021: Contextual Retrieval (Small-to-Big)** <!-- id: 20 -->
+    - [ ] Nadograditi `Ingestor` da sprema "parent_id" i parent sadržaj.
+    - [ ] Implementirati pretragu koja pronalazi male chunkove, ali vraća prošireni kontekst (rečenica -> paragraf).
+    - [ ] Smanjiti halucinacije pružanjem boljeg konteksta.
+
+- [ ] **T022: Query Expansion & Multi-Search** <!-- id: 21 -->
+    - [ ] Koristiti LLM za generiranje 3-5 varijacija korisničkog upita.
+    - [ ] Izvršiti paralelne pretrage za svaku varijaciju.
+    - [ ] Implementirati **Reciprocal Rank Fusion (RRF)** za spajanje rezultata.
+
+- [ ] **T023: Semantic Clustering & Auto-Tagging** <!-- id: 22 -->
+    - [ ] Automatsko grupiranje sličnih chunkova (Topic Modeling).
+    - [ ] Auto-generiranje tagova za nove dokumente.
+    - [ ] Vizualizacija mapa znanja (Knowledge Graph basic).
