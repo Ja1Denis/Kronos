@@ -84,6 +84,41 @@ class Librarian:
         conn.commit()
         conn.close()
 
+    def search_entities(self, query, etype=None, project=None, limit=5):
+        """Pretražuje ekstrahirane entitete po sadržaju."""
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+        
+        sql = "SELECT id, file_path, project, type, content, created_at FROM entities WHERE content LIKE ?"
+        params = [f"%{query}%"]
+        
+        if etype:
+            sql += " AND type = ?"
+            params.append(etype)
+        
+        if project:
+            sql += " AND project = ?"
+            params.append(project)
+            
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        
+        cursor.execute(sql, tuple(params))
+        results = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "id": r[0],
+                "file_path": r[1],
+                "project": r[2],
+                "type": r[3],
+                "content": r[4],
+                "created_at": r[5]
+            }
+            for r in results
+        ]
+
     def search_fts(self, query_stemmed, project=None, limit=5):
         """
         Izvodi keyword search koristeći FTS5 na stemiranom sadržaju.
@@ -203,6 +238,41 @@ class Librarian:
             
         conn.close()
 
+    def save_entity(self, etype, content, project=None):
+        """Ručno sprema entitet u bazu."""
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+        
+        # 0. Provjera duplikata
+        cursor.execute("SELECT id FROM entities WHERE type = ? AND content = ? AND project = ?", (etype, content, project))
+        if cursor.fetchone():
+            conn.close()
+            return None # Već postoji
+            
+        timestamp = datetime.now().isoformat()
+        try:
+            cursor.execute('''
+                INSERT INTO entities (project, type, content, created_at)
+                VALUES (?, ?, ?, ?)
+            ''', (project, etype, content, timestamp))
+            new_id = cursor.lastrowid
+            conn.commit()
+            
+            # Log event
+            self.log_event("entity_saved", {
+                "id": new_id,
+                "type": etype,
+                "content": content,
+                "project": project
+            })
+            
+            return new_id
+        except Exception as e:
+            print(f"Greška pri ručnom spremanju entiteta: {e}")
+            return None
+        finally:
+            conn.close()
+
     def is_file_processed(self, file_path):
         """Provjerava je li datoteka već obrađena i nepromijenjena."""
         if not os.path.exists(file_path):
@@ -233,24 +303,64 @@ class Librarian:
         conn.commit()
         conn.close()
 
-    def store_archive(self, chunks, file_metadata):
-        """Sprema chunkove u JSONL arhivu (append mode)."""
+    def log_event(self, event_type, data):
+        """Sprema događaj u JSONL arhivu (Event Sourcing)."""
         try:
+            record = {
+                "event": event_type,
+                "timestamp": datetime.now().isoformat(),
+                "data": data
+            }
             with open(self.archive_path, 'a', encoding='utf-8') as f:
-                for chunk in chunks:
-                    record = {
-                        "content": chunk,
-                        "metadata": file_metadata,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            print(f"{Fore.BLUE}💾 Arhivirano {len(chunks)} chunkova u JSONL.{Style.RESET_ALL}")
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
         except Exception as e:
-            print(f"{Fore.RED}❌ Greška pri arhiviranju: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}❌ Greška pri logiranju događaja: {e}{Style.RESET_ALL}")
+
+    def store_archive(self, chunks, file_metadata, extracted_data=None):
+        """Sprema chunkove i entitete u JSONL arhivu kao EVENT."""
+        data = {
+            "chunks": chunks,
+            "metadata": file_metadata,
+            "entities": extracted_data
+        }
+        self.log_event("file_processed", data)
+        print(f"{Fore.BLUE}💾 Događaj 'file_processed' spremljen u arhivu.{Style.RESET_ALL}")
 
     def get_chroma_client(self):
         """Vraća klijenta za vektorsku bazu."""
         return chromadb.PersistentClient(path=self.store_path)
+
+    def get_project_stats(self):
+        """Dohvaća statistiku po projektima."""
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+        
+        projects = {}
+        try:
+            # Broj datoteka po projektu
+            cursor.execute("SELECT project, count(*) FROM files GROUP BY project")
+            for proj, count in cursor.fetchall():
+                projects[proj] = {"files": count, "chunks": 0, "entities": {}}
+            
+            # Broj chunkova po projektu
+            cursor.execute("SELECT project, count(*) FROM knowledge_fts GROUP BY project")
+            for proj, count in cursor.fetchall():
+                if proj in projects:
+                    projects[proj]["chunks"] = count
+                else:
+                    projects[proj] = {"files": 0, "chunks": count, "entities": {}}
+            
+            # Broj entiteta po projektu i tipu
+            cursor.execute("SELECT project, type, count(*) FROM entities GROUP BY project, type")
+            for proj, etype, count in cursor.fetchall():
+                if proj in projects:
+                    projects[proj]["entities"][etype] = count
+                
+        except Exception as e:
+            print(f"Greška pri dohvaćanju statistike projekata: {e}")
+            
+        conn.close()
+        return projects
 
     def get_stats(self):
         """Dohvaća statistiku baze podataka."""
@@ -291,7 +401,7 @@ class Librarian:
         conn.close()
         return stats
 
-    def wipe_all(self):
+    def wipe_all(self, keep_archive=False):
         """Briše sve lokalne podatke."""
         # 1. Obriši SQLite podatke
         conn = sqlite3.connect(self.meta_path)
@@ -307,7 +417,7 @@ class Librarian:
             conn.close()
         
         # 2. Obriši JSONL
-        if os.path.exists(self.archive_path):
+        if not keep_archive and os.path.exists(self.archive_path):
             try:
                 os.remove(self.archive_path)
             except Exception as e:
@@ -436,6 +546,48 @@ class Librarian:
             "created_at": result[7]
         }
 
+    def get_decision_history(self, decision_id):
+        """Dohvaća cijeli lanac promjena za jednu odluku (unatrag i unaprijed)."""
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+        
+        # 1. Nađi korijensku odluku (prvu u lancu) ili idi ciklički
+        # Za sada ćemo samo uzeti trenutnu i tražiti sve koji su je zamijenili 
+        # ili koje je ona zamijenila.
+        
+        # Pojednostavljeno: nađi sve odluke koje imaju isti 'content' (približno) 
+        # ili su povezane preko superseded_by (Decision #ID format).
+        
+        all_decisions = []
+        
+        def find_related(current_id):
+            cursor.execute("SELECT id, content, valid_from, valid_to, superseded_by, created_at FROM entities WHERE id = ?", (current_id,))
+            res = cursor.fetchone()
+            if not res: return
+            
+            dec = {
+                "id": res[0],
+                "content": res[1],
+                "valid_from": res[2],
+                "valid_to": res[3],
+                "superseded_by": res[4],
+                "created_at": res[5]
+            }
+            all_decisions.append(dec)
+            
+            # Ako ima superseded_by, prati lanac unaprijed
+            if dec["superseded_by"] and "Decision #" in dec["superseded_by"]:
+                import re
+                match = re.search(r'Decision #(\d+)', dec["superseded_by"])
+                if match:
+                    next_id = int(match.group(1))
+                    if next_id != current_id: # Spriječi infinit loop
+                        find_related(next_id)
+
+        find_related(decision_id)
+        conn.close()
+        return sorted(all_decisions, key=lambda x: x['created_at'])
+
     def ratify_decision(self, decision_id, valid_from=None, valid_to=None, superseded_by=None):
         """
         Ratificira odluku - ažurira njene temporalne parametre.
@@ -482,6 +634,16 @@ class Librarian:
         cursor.execute(query, tuple(params))
         conn.commit()
         conn.close()
+        
+        # Log event
+        self.log_event("decision_ratified", {
+            "decision_id": decision_id,
+            "updates": {
+                "valid_from": valid_from,
+                "valid_to": valid_to,
+                "superseded_by": superseded_by
+            }
+        })
         
         return True
 
@@ -538,5 +700,13 @@ class Librarian:
 
         conn.commit()
         conn.close()
+        
+        # Log event
+        self.log_event("decision_superseded", {
+            "old_decision_id": old_decision_id,
+            "new_decision_id": new_id,
+            "new_decision_text": new_decision_text,
+            "valid_from": valid_from
+        })
         
         return new_id

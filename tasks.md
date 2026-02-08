@@ -71,46 +71,46 @@ Cilj: Pretvoriti Kronosa u aktivnog sugovornika i alat za upravljanje znanjem.
 ## 🌌 Faza 4: "Evolution" (Kronos 2.0)
 Cilj: Pretvoriti Kronos iz "još jednog RAG-a" u pravi Semantički Operativni Sustav.
 
-- [ ] **T013: Event Sourcing Arhitektura** <!-- id: 12 -->
-    - [ ] Učiniti `archive.jsonl` primarnim izvorom istine (Source of Truth).
-    - [ ] Kreirati `rebuild_from_archive.py` skriptu za regeneraciju SQLite/ChromaDB iz JSONL-a.
-    - [ ] Testirati full rebuild i validirati integritet.
-    - [ ] Dokumentirati event schema (insert/update/delete eventi).
+- [x] **T013: Event Sourcing Arhitektura** <!-- id: 12 -->
+    - [x] Učiniti `archive.jsonl` primarnim izvorom istine (Source of Truth).
+    - [x] Kreirati `rebuild_from_archive.py` skriptu za regeneraciju SQLite/ChromaDB iz JSONL-a.
+    - [x] Testirati full rebuild i validirati integritet.
+    - [x] Dokumentirati event schema (insert/update/delete eventi).
 
-- [ ] **T014: Entity-First Retrieval** <!-- id: 13 -->
-    - [ ] Modificirati `Oracle.ask()` da prvo vraća strukturirane objekte (Decision/Fact/Task).
-    - [ ] Tek nakon objekata prikazati "evidence chunks" kao supporting materijal.
-    - [ ] Dodati type-aware boosting (ako upit sadrži "odluka" → prioritiziraj Decision entitete).
-    - [ ] Implementirati "Entity Card" formatiranje u CLI outputu.
+- [x] **T014: Entity-First Retrieval** <!-- id: 13 -->
+    - [x] Modificirati `Oracle.ask()` da prvo vraća strukturirane objekte (Decision/Fact/Task).
+    - [x] Tek nakon objekata prikazati "evidence chunks" kao supporting materijal.
+    - [x] Dodati type-aware boosting (ako upit sadrži "odluka" → prioritiziraj Decision entitete).
+    - [x] Implementirati "Entity Card" formatiranje u CLI outputu.
 
-- [ ] **T015: Temporal History Query** <!-- id: 14 -->
-    - [ ] Proširiti `Oracle` da vraća povijest promjena za odluke ("prije" vs "sada").
-    - [ ] Dodati `--history` flag u CLI za prikaz evolucije odluka.
-    - [ ] Pametna detekcija upita o promjenama ("kako se mijenjao cilj?").
-    - [ ] API endpoint `/decisions/{id}/history` za timeline.
+- [x] **T015: Temporal History Query** <!-- id: 14 -->
+    - [x] Proširiti `Oracle` da vraća povijest promjena za odluke ("prije" vs "sada").
+    - [x] Dodati `--history` flag u CLI za prikaz evolucije odluka.
+    - [x] Pametna detekcija upita o promjenama ("kako se mijenjao cilj?").
+    - [x] API endpoint `/decisions/{id}/history` za timeline.
 
-- [ ] **T016: Benchmark & Evaluation Suite** <!-- id: 15 -->
-    - [ ] Kreirati `eval/` folder s 20+ test pitanja.
-    - [ ] Skripta za mjerenje: (a) Recall@K, (b) Context Tokens, (c) Latency.
-    - [ ] Usporedba: raw file dump vs Kronos retrieval.
-    - [ ] Generiranje Markdown reporta s rezultatima.
-    - [ ] Integracija u CI (pytest ili standalone).
+- [x] **T016: Benchmark & Evaluation Suite** <!-- id: 15 -->
+    - [x] Kreirati `eval/` folder s 20+ test pitanja.
+    - [x] Skripta za mjerenje: (a) Recall@K, (b) Context Tokens, (c) Latency.
+    - [x] Usporedba: raw file dump vs Kronos retrieval.
+    - [x] Generiranje Markdown reporta s rezultatima.
+    - [x] Integracija u CI (pytest ili standalone).
 
-- [ ] **T017: Active Memory CLI (save/promote)** <!-- id: 16 -->
-    - [ ] `kronos save "tekst" --as decision/fact/task` - brzi unos zapisa.
-    - [ ] `kronos promote CHUNK_ID --as decision` - pretvaranje rezultata pretrage u trajni zapis.
-    - [ ] Interaktivni wizard ako korisnik ne specificira tip.
-    - [ ] Validacija duplikata prije spremanja.
+- [x] **T017: Active Memory CLI (save/promote)** <!-- id: 16 -->
+    - [x] `kronos save "tekst" --as decision/fact/task` - brzi unos zapisa.
+    - [x] `kronos promote CHUNK_ID --as decision` - pretvaranje rezultata pretrage u trajni zapis.
+    - [x] Interaktivni wizard ako korisnik ne specificira tip.
+    - [x] Validacija duplikata prije spremanja.
 
-- [ ] **T018: Hybrid Search Pipeline (Hardening)** <!-- id: 17 -->
-    - [ ] Refaktorirati Oracle da koristi 3-stage pipeline kao default:
+- [x] **T018: Hybrid Search Pipeline (Hardening)** <!-- id: 17 -->
+    - [x] Refaktorirati Oracle da koristi 3-stage pipeline kao default:
         1. Keyword filter (FTS5/BM25) nad naslovima i sažecima.
         2. Dense retrieval (ChromaDB) nad top-N kandidata.
         3. Reranking nad top-K finalista.
-    - [ ] A/B testiranje stare vs nove pipeline logike.
-    - [ ] Konfigurabilni parametri (N, K) kroz config.
+    - [x] A/B testiranje stare vs nove pipeline logike.
+    - [x] Konfigurabilni parametri (N, K) kroz config.
 
-- [ ] **T019: Multi-Project Dashboard** <!-- id: 18 -->
-    - [ ] CLI komanda `kronos projects` - lista svih projekata s statistikama.
-    - [ ] `kronos project [ime] --stats` - detalji o pojedinom projektu.
-    - [ ] Web UI (opcionalno, FastAPI + HTMX) za vizualizaciju znanja.
+- [x] **T019: Multi-Project Dashboard** <!-- id: 18 -->
+    - [x] CLI komanda `kronos projects` - lista svih projekata s statistikama.
+    - [x] `kronos project [ime] --stats` - detalji o pojedinom projektu.
+    - [x] Web UI (opcionalno, FastAPI + HTMX) za vizualizaciju znanja.

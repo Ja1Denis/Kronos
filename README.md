@@ -15,61 +15,59 @@ Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) d
 
 ## 🚀 Brzi Start
 
-### 1. Ingestija (Učitavanje znanja)
+### 1. One-Click Chat 🖱️
+Sada možeš pokrenuti chat direktno s Desktopa koristeći kreiranu ikonu **"Kronos AI Chat"** ili pokretanjem:
+```powershell
+.\run_chat.bat
+```
+
+### 2. Ingestija (Učitavanje znanja)
 Učitaj projekt kako bi Kronos naučio o njemu:
 ```powershell
 .\run.ps1 ingest "." -Recursive
 ```
 
-### 2. MCP Server (Integracija s Claude-om)
-Omogući Claude-u da koristi Kronos kao alat:
+### 3. Ručni Unos Znanja
+Dodaj važnu informaciju ili odluku bez pisanja datoteka:
 ```powershell
-.\run.ps1 mcp
-```
-*Konfiguracija za Claude Desktop nalazi se u `claude_desktop_config.json`.*
-
-### 3. Interaktivni Chat
-Razgovaraj s lokalnom memorijom:
-```powershell
-.\run.ps1 chat
-```
-
-### 4. Sigurnost (Backup)
-Nikad ne gubi znanje:
-```powershell
-.\run.ps1 backup
+python -m src.cli save "Opis tvoje odluke" --as decision --project kronos
 ```
 
 ---
 
 ## 🧠 Napredno Korištenje
 
-### Upravljanje Odlukama (Ratifikacija)
-Ako se odluka promijenila, ratificiraj novu verziju:
+### Upravljanje Odlukama i Povijest
+Kronos prati evoluciju tvog razmišljanja:
 ```powershell
-# Prikaži sve odluke
-.\run.ps1 decisions
-
 # Zamijeni staru odluku novom
-.\run.ps1 ratify ID_ODLUKE --supersede "Nova odluka o arhitekturi"
+.\run.ps1 ratify ID --supersede "Nova verzija odluke"
+
+# Pogledaj timeline promjena
+.\run.ps1 history ID
 ```
 
-### API Server
-Pokreni REST API za vanjske aplikacije:
+### Multi-Project Dashboard
+Vidi stanje svih svojih projekata:
 ```powershell
-.\run.ps1 serve
+.\run.ps1 projects
 ```
-- **URL**: `http://127.0.0.1:8000`
-- **Docs**: `http://127.0.0.1:8000/docs`
+
+### Benchmark & Rebuild
+Provjeri performanse ili rekonstruiraj bazu iz arhive:
+```powershell
+.\run.ps1 benchmark   # Test pretrage i latencije
+.\run.ps1 rebuild     # Potpuna rekonstrukcija iz archive.jsonl
+```
 
 ---
 
-## 🏗️ Arhitektura
+## 🏗️ Arhitektura (Kronos 2.0)
 Projekt se sastoji od modularnih komponenata:
-1.  **Ingestor**: Orkestrator za čitanje i chunking dokumenata.
-2.  **Librarian**: Upravitelj metapodacima i FTS indeksom (SQLite).
-3.  **Oracle**: Mozak koji izvodi hibridni retrieval i reranking.
-4.  **Watcher**: Detektira promjene na disku u stvarnom vremenu.
+1.  **Ingestor**: Orkestrator za čitanje dokumenata.
+2.  **Librarian**: Upravitelj metapodacima i FTS indeksom. Podržava **Event Sourcing**.
+3.  **Oracle**: 3-stage hybrid retrieval pipeline (Keyword -> Vector -> Reranking).
+4.  **Watcher**: Real-time indeksiranje promjena.
 5.  **MCP Server**: Bridge prema modernim AI klijentima.
 
 ---
@@ -88,4 +86,4 @@ Pokreni kompletan testni paket:
 ```
 
 ---
-*Izrađeno s ❤️ za naprednu AI kolaboraciju i uštedu tokena. Version v1.0.0-mvp*
+*Izrađeno s ❤️ za naprednu AI kolaboraciju. Version v2.0.0-evolution*

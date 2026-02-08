@@ -93,7 +93,7 @@ class Ingestor:
                     logger.info(f"   Strukturirano znanje: {summary}")
 
             # 3. Spremi u arhivu (JSONL)
-            self.librarian.store_archive(chunks, file_meta)
+            self.librarian.store_archive(chunks, file_meta, extracted_data=extracted_data)
             
             # Vektorizacija (ChromaDB)
             ids = [f"{os.path.basename(file_path)}_{i}_{hash(chunk)}" for i in range(len(chunks))]

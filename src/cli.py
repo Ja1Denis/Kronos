@@ -85,32 +85,84 @@ def ask(
     with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
         results = oracle.ask(query, project=project, limit=limit, silent=True)
 
-    if not results:
+    if not results["entities"] and not results["chunks"]:
         console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
         return
 
-    console.print(f"\n[header]Kronos je pronašao sljedeće odgovore:[/]\n")
+    # 1. PRIKAZ ENTITETA (Structured Objects)
+    if results["entities"]:
+        console.print(f"\n[bold accent]💎 Pronađeni Entiteti ({len(results['entities'])}):[/]")
+        for ent in results["entities"]:
+            source = ent['metadata'].get('source')
+            source_name = os.path.basename(source) if source else "Ručni unos"
+            proj_tag = f"[[dim]{ent['metadata'].get('project', 'unknown')}[/]] "
+            
+            # Entity Card formatiranje
+            etype = ent['type']
+            type_style = "bold green" if etype == "DECISION" else "bold yellow"
+            
+            content = f"{ent['content']}\n\n[dim]Izvor: {source_name} | Kreirano: {ent['created_at']}[/]"
+            panel = Panel(
+                content,
+                title=f"{proj_tag}[{type_style}]{etype} #{ent['id']}[/]",
+                border_style="accent",
+                padding=(1, 2)
+            )
+            console.print(panel)
 
-    for i, res in enumerate(results):
-        source = res['metadata'].get('source', 'Nepoznato')
-        source_name = os.path.basename(source)
-        score = res['score']
-        m_type = res['type']
-        content = res['content']
+    # 2. PRIKAZ CHUNKOVA (Evidence)
+    if results["chunks"]:
+        header = "\n[bold info]📖 Citati iz dokumenata (Evidence):[/]" if results["entities"] else "\n[header]Pronađeni citati:[/]"
+        console.print(header)
         
-        # Formatiranje boje ovisno o tipu
-        type_color = "green" if "Vector" in m_type else "yellow"
-        proj_tag = f"[[dim]{res['metadata'].get('project', 'unknown')}[/]] "
-        
-        panel_content = f"{content}\n\n[dim]Izvor: {source_name} | Score: {score:.2%}[/]"
-        panel = Panel(
+        for i, res in enumerate(results["chunks"]):
+            source = res['metadata'].get('source', 'Nepoznato')
+            source_name = os.path.basename(source)
+            method = res['method']
+            score = res.get('score', 0)
+            content = res['content']
+            
+            method_color = "green" if "Vector" in method else "yellow"
+            proj_tag = f"[[dim]{res['metadata'].get('project', 'unknown')}[/]] "
+            
+            panel_content = f"{content}\n\n[dim]Izvor: {source_name} | Metoda: {method} {f'(Score: {score:.2%})' if score > 0 else ''}[/]"
+            panel = Panel(
             panel_content,
-            title=f"{proj_tag}[{type_color}]{m_type} #{i+1}[/]",
-            border_style=type_color,
-            padding=(1, 2)
+            title=f"{proj_tag}[{method_color}]Citat #{i+1}[/]",
+            border_style=method_color,
+            padding=(1, 1)
         )
         console.print(panel)
-        console.print("")
+
+@app.command()
+def save(
+    content: str = typer.Argument(..., help="Sadržaj koji želiš spremiti"),
+    etype: Optional[str] = typer.Option(None, "--as", "-a", help="Tip zapisa (decision, fact, task)"),
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Projekt")
+):
+    """
+    Ručno sprema zapis u semantičku memoriju.
+    """
+    librarian = Librarian()
+    
+    # Wizard if etype is missing
+    if not etype:
+        console.print("\n[bold cyan]Odaberi tip zapisa:[/]")
+        console.print("  1. [green]DECISION[/] (Odluka)")
+        console.print("  2. [yellow]TASK[/] (Zadatak)")
+        console.print("  3. [white]FACT[/] (Činjenica)")
+        
+        choice = console.input("\nTraženi broj (1/2/3): ")
+        if choice == "1": etype = "decision"
+        elif choice == "2": etype = "task"
+        else: etype = "fact"
+
+    new_id = librarian.save_entity(etype.lower(), content, project=project)
+    
+    if new_id:
+        console.print(f"\n[bold success]✅ Zapis spremljen![/] (ID: #{new_id}, Tip: {etype.upper()})")
+    else:
+        console.print("\n[warning]⚠️ Zapis nije spremljen (vjerojatno već postoji).[/]")
 
 @app.command()
 def watch(
@@ -151,26 +203,29 @@ def chat():
             
             results = oracle.ask(query, project=target_project, limit=3, silent=True)
 
-        if not results:
+        if not results["entities"] and not results["chunks"]:
             console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
             continue
 
-        for i, res in enumerate(results):
-            source = os.path.basename(res['metadata'].get('source', 'Nepoznato'))
-            project_tag = res['metadata'].get('project', 'unknown')
-            score = res['score']
-            m_type = res['type']
-            content = res['content']
-            
-            type_color = "green" if "Vector" in m_type else "yellow"
-            
-            panel = Panel(
-                f"{content}\n\n[dim]Projekt: {project_tag} | Izvor: {source} | Score: {score:.2%}[/]",
-                title=f"[{type_color}]{m_type} #{i+1}[/]",
-                border_style=type_color,
-                padding=(1, 2)
+        # Kratki prikaz u chat modu (prvi entitet ili prvi chunk)
+        if results["entities"]:
+            ent = results["entities"][0]
+            ent_panel = Panel(
+                f"[bold cyan]{ent['type']}:[/] {ent['content']}",
+                title=f"[dim]{ent['metadata'].get('project')}[/]",
+                border_style="accent"
             )
-            console.print(panel)
+            console.print(ent_panel)
+        
+        if results["chunks"]:
+            chunk = results["chunks"][0]
+            source = os.path.basename(chunk['metadata'].get('source', 'Nepoznato'))
+            chunk_panel = Panel(
+                f"{chunk['content'][:300]}...",
+                title=f"[dim]Evidence: {source}[/]",
+                border_style="green"
+            )
+            console.print(chunk_panel)
 
 @app.command()
 def stats():
@@ -195,6 +250,35 @@ def stats():
     db_size = stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)
     table.add_row("Veličina Baze", f"{db_size/1024:.2f} MB")
     
+    console.print(table)
+    
+@app.command()
+def projects():
+    """
+    Prikazuje listu svih projekata i njihovu statistiku.
+    """
+    librarian = Librarian()
+    proj_stats = librarian.get_project_stats()
+    
+    if not proj_stats:
+        console.print("[warning]Nema aktivnih projekata u memoriji.[/]")
+        return
+        
+    table = Table(title="🏢 Kronos Multi-Project Dashboard", border_style="accent")
+    table.add_column("Projekt", style="bold cyan")
+    table.add_column("Files", justify="center")
+    table.add_column("Chunks", justify="center")
+    table.add_column("Knowledge (Entities)", style="dim")
+    
+    for name, data in proj_stats.items():
+        entities_summary = ", ".join([f"{k}:{v}" for k, v in data["entities"].items()])
+        table.add_row(
+            name or "default",
+            str(data["files"]),
+            str(data["chunks"]),
+            entities_summary or "None"
+        )
+        
     console.print(table)
 
 @app.command()
@@ -234,6 +318,51 @@ def decisions(
     console.print(f"\n[dim]Ukupno: {len(decision_list)} odluka[/]")
 
 @app.command()
+def history(
+    decision_id: int = typer.Argument(..., help="ID odluke za koju želiš vidjeti povijest")
+):
+    """
+    Prikazuje evoluciju (povijest) određene odluke.
+    """
+    librarian = Librarian()
+    history_list = librarian.get_decision_history(decision_id)
+    
+    if not history_list:
+        console.print(f"[error]❌ Nema povijesti za ID {decision_id}.[/]")
+        return
+        
+    console.print(Panel(f"[bold accent]Kronos Timeline: Evolucija Odluke #{decision_id}[/]", border_style="accent"))
+    
+    for i, dec in enumerate(history_list):
+        is_current = dec['id'] == decision_id
+        arrow = "🟢 [bold white]SADA[/]" if is_current else "⚪ [dim]PRIJE[/]"
+        
+        status = "[red]ZAMIJENJENA[/]" if dec.get('superseded_by') else "[green]AKTIVNA[/]"
+        
+        content = f"{dec['content']}\n\n[dim]Vrijedi od: {dec.get('valid_from') or '?'}[/]"
+        if dec.get('superseded_by'):
+            content += f"\n[dim]Zamijenjena: {dec.get('valid_to')} ({dec.get('superseded_by')})[/]"
+            
+        panel = Panel(
+            content,
+            title=f"{arrow} - Odluka #{dec['id']} ({status})",
+            border_style="accent" if is_current else "dim",
+            padding=(1, 2)
+        )
+        console.print(panel)
+        if i < len(history_list) - 1:
+            console.print("      [bold magenta]│[/]")
+            console.print("      [bold magenta]▼[/]")
+
+@app.command()
+def benchmark():
+    """
+    Pokreće benchmark testove i generira report o performansama.
+    """
+    from src.benchmark import run_benchmark
+    run_benchmark()
+
+@app.command()
 def ratify(
     decision_id: int = typer.Argument(..., help="ID odluke za ratifikaciju"),
     valid_from: Optional[str] = typer.Option(None, "--from", "-f", help="Datum od kada vrijedi (YYYY-MM-DD)"),
@@ -270,13 +399,19 @@ def ratify(
         console.print("\n[warning]Koristi --from, --to ili --supersede za ažuriranje.[/]")
         return
     
-    # Izvrši ratifikaciju
-    success = librarian.ratify_decision(
-        decision_id,
-        valid_from=valid_from,
-        valid_to=valid_to,
-        superseded_by=supersede
-    )
+    # Izvrši ratifikaciju / zamjenu
+    if supersede:
+        new_id = librarian.supersede_decision(decision_id, supersede)
+        success = new_id is not None
+        if success:
+            console.print(f"\n[bold success]✅ Odluka #{decision_id} zamijenjena novom (#{new_id})![/]")
+    else:
+        success = librarian.ratify_decision(
+            decision_id,
+            valid_from=valid_from,
+            valid_to=valid_to,
+            superseded_by=None
+        )
     
     if success:
         console.print(f"\n[bold success]✅ Odluka #{decision_id} uspješno ratificirana![/]")
@@ -415,6 +550,19 @@ def restore(
             
         except Exception as e:
             console.print(f"[error]❌ Greška pri vraćanju podataka: {e}[/]")
+
+@app.command()
+def rebuild():
+    """
+    Rekonstruira SQLite i ChromaDB baze iz archive.jsonl datoteke.
+    Korisno kod migracija ili gubitka podataka.
+    """
+    confirm = typer.confirm("Ovo će obrisati trenutnu bazu i učitati sve iz arhive. Nastaviti?", default=False)
+    if confirm:
+        from src.rebuild_from_archive import rebuild as run_rebuild
+        run_rebuild()
+    else:
+        console.print("[info]Otkazano.[/]")
 
 @app.command()
 def wipe():

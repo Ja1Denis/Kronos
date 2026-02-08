@@ -18,77 +18,94 @@ class Oracle:
 
     def ask(self, query, project=None, limit=5, silent=False):
         """
-        Postavlja pitanje Kronosu (Hibridna pretraga).
-        Kombinira:
-        1. Vektorsku pretragu (ChromaDB - ONNX)
-        2. Keyword pretragu (SQLite FTS5 - BM25)
+        Postavlja pitanje Kronosu koristeći 3-stage pipeline:
+        1. Retrieval (Vector + Keyword)
+        2. Merging & Deduplication
+        3. Reranking (Scoring)
         """
         from src.utils.stemmer import stem_text
         stemmed_query = stem_text(query, mode="aggressive")
         
         if not silent:
             project_info = f" na projektu [bold cyan]{project}[/]" if project else ""
-            print(f"{Fore.MAGENTA}🔮 Oracle traži odgovor{project_info} na: '{query}'{Style.RESET_ALL}")
-        
-        # 1. Vektorska pretraga
+            print(f"{Fore.MAGENTA}🔮 Kronos razmatra{project_info}: '{query}'{Style.RESET_ALL}")
+
+        # STAGE 0: Entity Search (Prioritet)
+        entities = self.librarian.search_entities(query, project=project, limit=limit)
+
+        # STAGE 1: Broad Retrieval
+        # a) Vector
         where_filter = {"project": project} if project else None
-        
-        vector_results = self.collection.query(
+        vector_candidates = self.collection.query(
             query_texts=[query],
-            n_results=limit,
+            n_results=limit * 2, # Uzmi više kandidata za reranking
             where=where_filter
         )
         
-        # 2. Keyword pretraga (FTS)
-        fts_results = self.librarian.search_fts(stemmed_query, project=project, limit=limit)
-        
-        # 3. Kombinacija rezultata (Deduplikacija)
-        final_results = []
+        # b) Keyword
+        fts_candidates = self.librarian.search_fts(stemmed_query, project=project, limit=limit * 2)
+
+        # STAGE 2: Merging & Deduplication
+        all_chunks = []
         seen_contents = set()
-        
-        # Dodaj vektorske rezultate
-        if vector_results['documents']:
-            documents = vector_results['documents'][0]
-            metadatas = vector_results['metadatas'][0]
-            distances = vector_results['distances'][0]
-            
-            for doc, meta, dist in zip(documents, metadatas, distances):
+
+        # Dodaj vektorske kandidate
+        if vector_candidates['documents']:
+            for doc, meta, dist in zip(vector_candidates['documents'][0], vector_candidates['metadatas'][0], vector_candidates['distances'][0]):
                 if doc not in seen_contents:
-                    final_results.append({
+                    score = 1 - dist
+                    all_chunks.append({
                         "content": doc,
                         "metadata": meta,
-                        "score": 1 - dist,
-                        "type": "Vector 🧠"
+                        "v_score": score,
+                        "k_score": 0,
+                        "method": "Vector"
                     })
                     seen_contents.add(doc)
-        
-        # Dodaj FTS rezultate
-        for path, content in fts_results:
-            if content not in seen_contents:
-                # FTS results in our schema now include project info, but search_fts returns (path, content)
-                # We could update search_fts to return project too, or just use what we have.
-                final_results.append({
+
+        # Dodaj i poveži FTS kandidate
+        for path, content in fts_candidates:
+            if content in seen_contents:
+                # Već imamo iz vektora, povečaj mu k_score
+                for chunk in all_chunks:
+                    if chunk["content"] == content:
+                        chunk["k_score"] = 1.0 # Jednostavan boosting
+                        chunk["method"] = "Hybrid 🧩"
+                        break
+            else:
+                all_chunks.append({
                     "content": content,
-                    "metadata": {"source": path}, 
-                    "score": 0.0, 
-                    "type": "Keyword 🗝️"
+                    "metadata": {"source": path},
+                    "v_score": 0,
+                    "k_score": 1.0,
+                    "method": "Keyword"
                 })
                 seen_contents.add(content)
-                
-        if not silent:
-            if not final_results:
-                print(f"{Fore.YELLOW}Nema rezultata.{Style.RESET_ALL}")
-                return []
-                
-            print(f"{Fore.GREEN}Pronađeno {len(final_results)} unikatnih rezultata:{Style.RESET_ALL}")
-            
-            for i, res in enumerate(final_results[:limit*2]): # Prikazujemo top rezultate
-                source = res['metadata'].get('source', 'Unknown')
-                source_name = os.path.basename(source)
-                score_display = f"{res['score']:.2%}" if res['type'].startswith("Vector") else "N/A"
-                
-                print(f"\n{Fore.CYAN}📄 [{res['type']}] {source_name}{Style.RESET_ALL} (Score: {score_display})")
-                print(f"   {res['content'][:300].replace(chr(10), ' ')}...") # Replace newlines for cleaner output
-                print("-" * 50)
-            
-        return final_results
+
+        # STAGE 3: Simple Reranking (Scoring)
+        # Finalni score = vector_score + keyword_boost
+        for chunk in all_chunks:
+            chunk["final_score"] = chunk["v_score"] + (chunk["k_score"] * 0.3)
+
+        # Sortiraj po finalnom scoru
+        all_chunks.sort(key=lambda x: x["final_score"], reverse=True)
+
+        return {
+            "entities": [
+                {
+                    "id": ent['id'],
+                    "content": ent['content'],
+                    "metadata": {"source": ent['file_path'], "project": ent['project']},
+                    "type": ent['type'].upper(),
+                    "created_at": ent['created_at']
+                } for ent in entities
+            ],
+            "chunks": [
+                {
+                    "content": c["content"],
+                    "metadata": c["metadata"],
+                    "score": c["final_score"],
+                    "method": c["method"]
+                } for c in all_chunks[:limit]
+            ]
+        }
