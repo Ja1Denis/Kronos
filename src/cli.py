@@ -198,6 +198,104 @@ def stats():
     console.print(table)
 
 @app.command()
+def decisions(
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Filtriraj po projektu"),
+    all: bool = typer.Option(False, "--all", "-a", help="Prikaži i zamijenjene odluke")
+):
+    """
+    Prikazuje sve odluke u bazi znanja.
+    """
+    librarian = Librarian()
+    decision_list = librarian.get_decisions(project=project, include_superseded=all)
+    
+    if not decision_list:
+        console.print("[warning]Nema odluka u bazi.[/]")
+        return
+    
+    table = Table(title="⚖️ Odluke", border_style="accent")
+    table.add_column("ID", style="dim", width=6)
+    table.add_column("Sadržaj", style="white", max_width=50)
+    table.add_column("Vrijedi", style="cyan")
+    table.add_column("Status", style="green")
+    
+    for dec in decision_list:
+        dec_id = str(dec['id'])
+        content = dec['content'][:45] + "..." if len(dec['content']) > 45 else dec['content']
+        
+        v_from = dec.get('valid_from') or "∞"
+        v_to = dec.get('valid_to') or "∞"
+        validity = f"{v_from} → {v_to}"
+        
+        status = "[red]Zamijenjena[/]" if dec.get('superseded_by') else "[green]Aktivna[/]"
+        
+        table.add_row(dec_id, content, validity, status)
+    
+    console.print(table)
+    console.print(f"\n[dim]Ukupno: {len(decision_list)} odluka[/]")
+
+@app.command()
+def ratify(
+    decision_id: int = typer.Argument(..., help="ID odluke za ratifikaciju"),
+    valid_from: Optional[str] = typer.Option(None, "--from", "-f", help="Datum od kada vrijedi (YYYY-MM-DD)"),
+    valid_to: Optional[str] = typer.Option(None, "--to", "-t", help="Datum do kada vrijedi (YYYY-MM-DD)"),
+    supersede: Optional[str] = typer.Option(None, "--supersede", "-s", help="Nova odluka koja zamjenjuje ovu")
+):
+    """
+    Ratificira odluku - ažurira njene temporalne parametre.
+    
+    Primjer:
+        kronos ratify 5 --from 2026-01-01 --to 2026-12-31
+    """
+    librarian = Librarian()
+    
+    # Provjeri postoji li odluka
+    decision = librarian.get_decision_by_id(decision_id)
+    if not decision:
+        console.print(f"[error]❌ Odluka s ID-om {decision_id} nije pronađena.[/]")
+        return
+    
+    console.print(Panel(
+        f"[bold accent]Ratifikacija Odluke #{decision_id}[/]\n\n"
+        f"[info]{decision['content'][:100]}{'...' if len(decision['content']) > 100 else ''}[/]",
+        border_style="accent"
+    ))
+    
+    # Ako ni jedan parametar nije zadan, prikaži interaktivni mod
+    if not any([valid_from, valid_to, supersede]):
+        console.print("\n[dim]Trenutne vrijednosti:[/]")
+        console.print(f"  Valid From: {decision.get('valid_from') or 'Nije definirano'}")
+        console.print(f"  Valid To: {decision.get('valid_to') or 'Nije definirano'}")
+        console.print(f"  Superseded By: {decision.get('superseded_by') or 'Nije zamijenjeno'}")
+        
+        console.print("\n[warning]Koristi --from, --to ili --supersede za ažuriranje.[/]")
+        return
+    
+    # Izvrši ratifikaciju
+    success = librarian.ratify_decision(
+        decision_id,
+        valid_from=valid_from,
+        valid_to=valid_to,
+        superseded_by=supersede
+    )
+    
+    if success:
+        console.print(f"\n[bold success]✅ Odluka #{decision_id} uspješno ratificirana![/]")
+        
+        # Prikaži ažurirane vrijednosti
+        updated = librarian.get_decision_by_id(decision_id)
+        table = Table(show_header=False, box=None)
+        table.add_column("Polje", style="dim")
+        table.add_column("Vrijednost", style="cyan")
+        
+        table.add_row("Valid From", updated.get('valid_from') or "∞")
+        table.add_row("Valid To", updated.get('valid_to') or "∞")
+        table.add_row("Superseded By", updated.get('superseded_by') or "-")
+        
+        console.print(table)
+    else:
+        console.print(f"[error]❌ Greška pri ratifikaciji odluke.[/]")
+
+@app.command()
 def mcp():
     """
     Pokreće Kronos kao MCP (Model Context Protocol) server.

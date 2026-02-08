@@ -58,7 +58,7 @@ Cilj: Pretvoriti Kronosa u aktivnog sugovornika i alat za upravljanje znanjem.
 - [x] **T010: Temporal Truth (Vrijeme i Odluke)** <!-- id: 9 -->
     - [x] Proširiti shemu za `valid_from`, `valid_to`, `superseded_by`.
     - [x] Implementirati logiku za detekciju kontradikcija (Foundations).
-    - [ ] API za "ratifikaciju" odluka.
+    - [x] API za "ratifikaciju" odluka.
 
 - [x] **T011: Robustness & Safety** <!-- id: 10 -->
     - [x] Implementirati **Debounce** za watcher.

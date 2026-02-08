@@ -334,7 +334,7 @@ class Librarian:
         cursor = conn.cursor()
 
         query = '''
-            SELECT content, valid_from, valid_to, superseded_by, file_path
+            SELECT id, content, valid_from, valid_to, superseded_by, file_path, project
             FROM entities
             WHERE type = 'decision'
             AND (valid_from IS NULL OR valid_from <= ?)
@@ -352,11 +352,191 @@ class Librarian:
         
         return [
             {
-                "content": r[0],
-                "valid_from": r[1],
-                "valid_to": r[2],
-                "superseded_by": r[3],
-                "file_path": r[4]
+                "id": r[0],
+                "content": r[1],
+                "valid_from": r[2],
+                "valid_to": r[3],
+                "superseded_by": r[4],
+                "file_path": r[5],
+                "project": r[6]
             }
             for r in results
         ]
+
+    def get_decisions(self, project=None, include_superseded=False):
+        """
+        Vraća sve odluke iz baze podataka.
+        
+        Args:
+            project: Opcionalno filtriranje po projektu
+            include_superseded: Ako True, uključuje i zamijenjene odluke
+        """
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+
+        query = '''
+            SELECT id, content, valid_from, valid_to, superseded_by, file_path, project, created_at
+            FROM entities
+            WHERE type = 'decision'
+        '''
+        params = []
+
+        if not include_superseded:
+            query += " AND (superseded_by IS NULL OR superseded_by = '')"
+
+        if project:
+            query += " AND project = ?"
+            params.append(project)
+
+        query += " ORDER BY created_at DESC"
+
+        cursor.execute(query, tuple(params))
+        results = cursor.fetchall()
+        conn.close()
+        
+        return [
+            {
+                "id": r[0],
+                "content": r[1],
+                "valid_from": r[2],
+                "valid_to": r[3],
+                "superseded_by": r[4],
+                "file_path": r[5],
+                "project": r[6],
+                "created_at": r[7]
+            }
+            for r in results
+        ]
+
+    def get_decision_by_id(self, decision_id):
+        """Vraća određenu odluku po ID-u."""
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, content, valid_from, valid_to, superseded_by, file_path, project, created_at
+            FROM entities
+            WHERE id = ? AND type = 'decision'
+        ''', (decision_id,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            return None
+            
+        return {
+            "id": result[0],
+            "content": result[1],
+            "valid_from": result[2],
+            "valid_to": result[3],
+            "superseded_by": result[4],
+            "file_path": result[5],
+            "project": result[6],
+            "created_at": result[7]
+        }
+
+    def ratify_decision(self, decision_id, valid_from=None, valid_to=None, superseded_by=None):
+        """
+        Ratificira odluku - ažurira njene temporalne parametre.
+        
+        Args:
+            decision_id: ID odluke za ažuriranje
+            valid_from: Datum od kada odluka vrijedi (YYYY-MM-DD)
+            valid_to: Datum do kada odluka vrijedi (YYYY-MM-DD)
+            superseded_by: Tekst ili ID odluke koja zamjenjuje ovu
+        
+        Returns:
+            True ako je ažuriranje uspjelo, False inače
+        """
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+
+        # Prvo provjeri postoji li odluka
+        cursor.execute("SELECT id FROM entities WHERE id = ? AND type = 'decision'", (decision_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False
+
+        # Izgradi UPDATE upit dinamički
+        updates = []
+        params = []
+        
+        if valid_from is not None:
+            updates.append("valid_from = ?")
+            params.append(valid_from)
+        if valid_to is not None:
+            updates.append("valid_to = ?")
+            params.append(valid_to)
+        if superseded_by is not None:
+            updates.append("superseded_by = ?")
+            params.append(superseded_by)
+
+        if not updates:
+            conn.close()
+            return True  # Ništa za ažurirati
+
+        params.append(decision_id)
+        query = f"UPDATE entities SET {', '.join(updates)} WHERE id = ?"
+        
+        cursor.execute(query, tuple(params))
+        conn.commit()
+        conn.close()
+        
+        return True
+
+    def supersede_decision(self, old_decision_id, new_decision_text, valid_from=None):
+        """
+        Zamjenjuje staru odluku novom.
+        
+        1. Označava staru odluku kao zamijenjenu (valid_to = danas, superseded_by = nova odluka)
+        2. Kreira novu odluku (valid_from = danas ili zadani datum)
+        
+        Args:
+            old_decision_id: ID stare odluke
+            new_decision_text: Tekst nove odluke
+            valid_from: Datum od kada nova odluka vrijedi (default: danas)
+        
+        Returns:
+            ID nove odluke ako uspješno, None inače
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        if valid_from is None:
+            valid_from = today
+
+        conn = sqlite3.connect(self.meta_path)
+        cursor = conn.cursor()
+
+        # Dohvati staru odluku
+        cursor.execute("""
+            SELECT file_path, project FROM entities 
+            WHERE id = ? AND type = 'decision'
+        """, (old_decision_id,))
+        old = cursor.fetchone()
+        
+        if not old:
+            conn.close()
+            return None
+
+        old_file_path, old_project = old
+
+        # Kreiraj novu odluku
+        timestamp = datetime.now().isoformat()
+        cursor.execute('''
+            INSERT INTO entities (file_path, project, type, content, valid_from, created_at)
+            VALUES (?, ?, 'decision', ?, ?, ?)
+        ''', (old_file_path, old_project, new_decision_text, valid_from, timestamp))
+        
+        new_id = cursor.lastrowid
+
+        # Ažuriraj staru odluku
+        cursor.execute('''
+            UPDATE entities 
+            SET valid_to = ?, superseded_by = ?
+            WHERE id = ?
+        ''', (today, f"Decision #{new_id}: {new_decision_text[:50]}", old_decision_id))
+
+        conn.commit()
+        conn.close()
+        
+        return new_id
