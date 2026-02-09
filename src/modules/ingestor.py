@@ -53,12 +53,12 @@ class Ingestor:
         if os.path.isfile(full_path):
             return [full_path]
 
-        pattern = "**/*.md" if recursive else "*.md"
-        # Tražimo markdown datoteke
-        md_files = glob.glob(os.path.join(full_path, pattern), recursive=recursive)
-        files.extend(md_files)
+        extensions = ["*.md", "*.txt", "*.php", "*.js"]
+        for ext in extensions:
+            pattern = f"**/{ext}" if recursive else ext
+            files.extend(glob.glob(os.path.join(full_path, pattern), recursive=recursive))
         
-        return files
+        return list(set(files)) # Unique files
     
     def _process_file(self, file_path, project="default", silent=False):
         """

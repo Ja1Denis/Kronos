@@ -1,8 +1,8 @@
 # Trenutni Status Projekta (Kronos)
 Datum: 2026-02-08 H2
 
-## 🚀 Status: Faza 6 U Tijeku (Cognitive Mastery)
-Projekt je tranziciji iz Faze 5 u **Fazu 6 (Cognitive Mastery)**, s fokusom na autonomiju i naprednu detekciju konzistentnosti.
+## 🚀 Status: Faza 6 - DEFAULT STABLE (Cognitive Mastery)
+Projekt je postavljen kao **Default Baseline** verzija (2026-02-09). Fokus je na stabilnosti i širenju znanja unutar ove arhitekture.
 
 ### 09.02.2026. (H0) - Autonomni Kustos (Curator)
 - **Autonomous Curator (T025)**: Dovršen modul za samostalno održavanje baze znanja.
@@ -10,11 +10,16 @@ Projekt je tranziciji iz Faze 5 u **Fazu 6 (Cognitive Mastery)**, s fokusom na a
 - **Knowledge Mining**: `curate --refine` skenira nestrukturirane tekstove i predlaže nove strukturirane entitete (Odluke/Činjenice).
 - **Historian Audit**: Integriran alat za provjeru konzistentnosti (`audit`).
 
+### 09.02.2026. (H4) - Instant Search & Daemon Mode
+- **Client-Server Architecture**: Uveden `start_kronos.ps1` i `ask_fast.ps1`.
+- **Cold Start Elimination**: Pretraga se izvršava u <1s jer su AI modeli trajno učitani u memoriju servera.
+- **Desktop Readiness**: Kreiran desktop prečac "Kronos Server" za pokretanje cijelog stacka.
+
 ### 09.02.2026. (H3) - Precision Tuning (Faza 7 Start)
 - **Cross-Encoder Reranking (T027)**: Implementiran `BAAI/bge-reranker-base` model u `Oracle` pipeline.
     - Sustav sada uzima top 15 kandidata (3x limit) i re-rankira ih dubokom analizom konteksta.
-    - Lazy loading modela osigurava brz startup CLI alata.
-- **Benchmark**: Inicijalni rezulati (Recall@5 ~16.7%) ukazuju na potrebu za daljnjim finetuningom ili boljom pripremom testnih podataka. Mehanizam je funkcionalan.
+    - Async preload osigurava nultu latenciju nakon prvog starta servera.
+- **Benchmark**: Inicijalni rezulati (Recall@5 ~16.7%) ukazuju na potrebu za daljnjim finetuningom. Mehanizam je funkcionalan.
 
 ### 08.02.2026. (H2) - Implementacija Historiana i Contradiction Detection
 - **Historian Module (T026)**: Implementirana detekcija semantičkih kontradikcija između novih unosa i postojećeg znanja. Koristi LLM za analizu konflikata.

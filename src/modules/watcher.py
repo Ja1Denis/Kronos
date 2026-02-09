@@ -16,11 +16,11 @@ class DebouncedEventHandler(FileSystemEventHandler):
         self.timers = {}
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith('.md'):
+        if not event.is_directory and any(event.src_path.endswith(ext) for ext in ['.md', '.txt', '.php', '.js']):
             self._schedule_processing(event.src_path)
 
     def on_created(self, event):
-        if not event.is_directory and event.src_path.endswith('.md'):
+        if not event.is_directory and any(event.src_path.endswith(ext) for ext in ['.md', '.txt', '.php', '.js']):
             self._schedule_processing(event.src_path)
 
     def _schedule_processing(self, file_path):

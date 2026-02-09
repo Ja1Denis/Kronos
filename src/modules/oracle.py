@@ -33,23 +33,12 @@ class Oracle:
             print(f"Warning: Ne mogu učitati Contextualizer: {e}")
             self.contextualizer = None
 
-    @property
-    def reranker(self):
-        if not hasattr(self, "_reranker"):
-             try:
-                 from sentence_transformers import CrossEncoder
-                 print(f"{Fore.YELLOW}⚡ Inicijaliziram Cross-Encoder (BAAI/bge-reranker-base)...{Style.RESET_ALL}")
-                 # Koristimo pouzdan BAAI model za reranking
-                 self._reranker = CrossEncoder("BAAI/bge-reranker-base", max_length=512)
-             except Exception as e:
-                 print(f"{Fore.RED}Greška pri učitavanju Rerankera: {e}{Style.RESET_ALL}")
-                 self._reranker = None
-        return self._reranker
-
     def _retrieve_candidates(self, query, project, limit, hyde, silent):
         """Helper metoda koja vraća sirove kandidate (Vector + FTS)."""
         from src.utils.stemmer import stem_text
         stemmed_query = stem_text(query, mode="aggressive")
+        
+        if not silent: print(f"  [Stemmed: {stemmed_query}]")
 
         # HyDE
         vector_query = query
@@ -122,22 +111,9 @@ class Oracle:
         4. Contextual Expansion
         """
         
-        # 1. Query Analysis & Expansion Strategy
+        # 1. Query Expansion
         queries = [query]
-        
-        # SMART HYDE LOGIC:
-        # Palimo HyDE samo ako je upit kratak (<5 riječi) I nema specifičnih keyworda.
-        # Cilj: Instant odgovori za jednostavna pitanja, AI pomoć za teška.
-        should_use_hyde = False
-        
-        if hyde: # Ako je user explicite tražio ili je default True
-            word_count = len(query.split())
-            has_keywords = any(k in query.lower() for k in ["select", "update", "delete", "class", "def ", "import "])
-            
-            if word_count < 5 and not has_keywords:
-                should_use_hyde = True
-        
-        if should_use_hyde and self.hypothesizer:
+        if expand and self.hypothesizer:
             if not silent: print(f"{Fore.MAGENTA}✨ Proširujem upit (Query Expansion)...{Style.RESET_ALL}")
             variations = self.hypothesizer.expand_query(query)
             queries = variations # ovo uključuje i original
@@ -151,7 +127,7 @@ class Oracle:
         merged_chunks = {}
         
         def fetch_candidates(q):
-            return self._retrieve_candidates(q, project, limit, should_use_hyde, silent=True)
+            return self._retrieve_candidates(q, project, limit, hyde, silent=True)
 
         with ThreadPoolExecutor(max_workers=len(queries)) as executor:
             results = list(executor.map(fetch_candidates, queries))
@@ -193,38 +169,6 @@ class Oracle:
         # Rerank prema finalnom (boostanom) score-u
         all_chunks.sort(key=lambda x: x["score"], reverse=True)
         
-        # --- [CROSS-ENCODER RERANKING] ---
-        # Uzimamo top N kandidata (npr. 3x limit) i re-rankiramo ih preciznim modelom
-        top_candidates = all_chunks[:limit * 3]
-        
-        if self.reranker and top_candidates:
-            try:
-                # Pripremi parove (Query, Document Content)
-                pairs = [[query, c['content']] for c in top_candidates]
-                
-                # Predvidi relevantnost (Logits)
-                scores = self.reranker.predict(pairs)
-                
-                # Ažuriraj score-ove (Sigmoid optimizacija za čitljivost [0-1])
-                import numpy as np
-                def sigmoid(x): return 1 / (1 + np.exp(-x))
-                
-                for i, score in enumerate(scores):
-                    # BGE-reranker vraća logite koji mogu biti negative/positive
-                    # Pretvaramo u probability za lakše debugiranje
-                    prob = sigmoid(score)
-                    top_candidates[i]["score"] = prob
-                    top_candidates[i]["method"] += f", Cross-Encoder ({prob:.4f})"
-                    
-                # Sortiraj ponovno po novom score-u
-                top_candidates.sort(key=lambda x: x["score"], reverse=True)
-                
-                # Zamijeni initial sort s reranked listom
-                all_chunks = top_candidates + all_chunks[limit*3:]
-                
-            except Exception as e:
-                print(f"{Fore.RED}Greška u rerankingu: {e}{Style.RESET_ALL}")
-
         # Contextual Expansion za top rezultate
         final_chunks = all_chunks[:limit]
         if self.contextualizer:

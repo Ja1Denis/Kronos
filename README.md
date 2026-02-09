@@ -15,8 +15,16 @@ Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) d
 
 ## 🚀 Brzi Start
 
-### 1. One-Click Chat 🖱️
-Sada možeš pokrenuti chat direktno s Desktopa koristeći kreiranu ikonu **"Kronos AI Chat"** ili pokretanjem:
+### 1. Ultra-Brza Pretraga (Desktop) 🚀
+Za trenutne odgovore bez čekanja:
+1.  **Dvaput klikni** na ikonu **"Kronos Server"** na radnoj površini.
+2.  Kada dobiješ potvrdu da je spreman, koristi:
+```powershell
+.\ask_fast.ps1 -Query "tvoje pitanje"
+```
+
+### 2. One-Click Chat 🖱️
+Sada možeš pokrenuti interaktivni chat direktno s Desktopa koristeći ikonu **"Kronos AI Chat"** ili:
 ```powershell
 .\run_chat.bat
 ```

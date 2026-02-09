@@ -255,7 +255,7 @@ def startup_event():
     from src.modules.watcher import Watcher
     
     def run_watcher():
-        watcher = Watcher(path="docs") # Defaultno prati docs folder
+        watcher = Watcher(path=".") # Prati cijeli projektni root
         watcher.run()
         
     thread = threading.Thread(target=run_watcher, daemon=True)

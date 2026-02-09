@@ -1,13 +1,24 @@
 # Development Log - Kronos
 
-## [2026-02-09] - Faza 7 Start: "Precision Tuning"
+## [2026-02-09] - Baseline Freeze: Kronos v2.0.0-evolution
+### Odluka:
+- **Verzija Kronosa (Faza 6) se službeno postavlja kao DEFAULTNA verzija za budući rad.**
+- Cilj: Osigurati stabilan temelj memorije prije daljnjih eksperimentalnih faza.
+
+## [2026-02-09] - UX & Speed Optimization: Client-Server Architecture
 ### Dodano:
+- **Kronos Server (FastAPI)**: Implementirana puna podrška za stalno pokrenut server (Daemon Mode). AI modeli se učitavaju samo jednom pri startu servera.
+- **`ask_fast.ps1`**: Ultra-brza CLI klijentska skripta koja komunicira s API-jem. Latencija pretrage smanjena s 30s na <1s (Cold Start eliminiran).
+- **`start_kronos.ps1`**: Pametni orkestrator koji pokreće server u pozadini, čeka "health check" potvrdu i javlja spremnost sustava.
+- **Desktop Shortcut "Kronos Server"**: Kreiran prečac na radnoj površini za pokretanje sustava jednim klikom.
+
+### Poboljšano:
 - **Cross-Encoder Reranking (T027)**: Implementiran `BAAI/bge-reranker-base` za dubinsko rerankiranje top 15-20 rezultata. Značajno poboljšava preciznost na dvosmislenim upitima.
-- **Async Model Preload**: `chat` komanda sada učitava Cross-Encoder model u pozadini (daemon thread) kako bi se eliminiralo čekanje na prvom upitu.
+- **Async Model Preload**: Server sada učitava teške modele pri pokretanju, omogućujući trenutnu dostupnost za sve klijente.
 - **Smart HyDE**: Optimizirana logika koja aktivira HyDE samo za kratke (<5 riječi) i nejasne upite. Default pretraga je sada instantna (<100ms).
 - **SQLite Timeout**: Povećan timeout na 30s za `Librarian` konekciju kako bi se spriječile "database locked" greške tijekom Live Synca.
 
-### Poboljšano:
+### Poboljšano (Infrastruktura):
 - **Stabilnost**: Watcher i user queries sada mogu koegzistirati bez rušenja baze.
 - **Performance**: Smanjena latencija za tipične use-caseove isključivanjem nepotrebnog HyDE-a.
 

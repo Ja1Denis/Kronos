@@ -228,7 +228,7 @@ def watch(
 
 @app.command()
 def chat(
-    hyde: bool = typer.Option(False, "--hyde", help="Koristi HyDE mode (default: False/Auto)"),
+    hyde: bool = typer.Option(True, "--hyde", help="Koristi HyDE mode (default: True)"),
     expand: bool = typer.Option(True, "--expand", "-e", help="Koristi Expansion mode (default: True)"),
     use_ai: bool = typer.Option(True, "--ai/--no-ai", help="Generiraj ljudski odgovor koristeći AI")
 ):
@@ -243,18 +243,6 @@ def chat(
     from src.modules.watcher import Watcher
     watcher = Watcher(path=".", recursive=True)
     watcher.start()
-    
-    # [OPTIMIZATION] Async Model Preload
-    # Pokrećemo učitavanje Cross-Encodera u zasebnoj dretvi odmah
-    import threading
-    def preload_model():
-        try:
-             # Samo pristupimo property-u da triggeramo lazy load
-             _ = oracle.reranker 
-        except: pass
-    
-    loader_thread = threading.Thread(target=preload_model, daemon=True)
-    loader_thread.start()
     
     status_msg = "[bold green]Live Sync: On[/] | [bold magenta]AI Mode: Active[/]"
     if not use_ai: status_msg = "[bold green]Live Sync: On[/] | [dim]AI: Off (Quotes Only)[/]"

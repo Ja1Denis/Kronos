@@ -45,6 +45,7 @@ Cilj: Implementirati "Kronoraising" arhitekturu.
     - [x] Dodati REST endpointe (/ingest, /query, /stats).
     - [x] Omogućiti JSON output za AI agente.
     - [x] Implementirati File Watcher za automatsko reindeksiranje.
+    - [x] **UX Bonus**: Implementiran klijent-server split (`ask_fast.ps1`) za nultu latenciju.
 
 - [x] **T009: Project Awareness & Chat** <!-- id: 8 -->
     - [x] Implementirati `project` tagiranje u bazi podataka.
