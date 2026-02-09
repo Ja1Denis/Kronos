@@ -1,21 +1,16 @@
 # Kronos Benchmark Report
 
-Datum: 2026-02-08 18:34:49
+Datum: 2026-02-09 00:34:23
 
 ## Sažetak
-- **Prosječni Recall@5:** 72.50%
-- **Prosječna Latencija:** 375.9 ms
+- **Prosječni Recall@5:** 16.67%
+- **Prosječna Latencija:** 21140.9 ms
 
 ## Detaljni Rezultati
 | Upit | Recall | Latencija (ms) | Entiteti |
 | :--- | :---: | :---: | :---: |
-| Što je Librarian? | 80% | 600.2 | 0 |
-| Kako radi Oracle? | 100% | 354.2 | 0 |
-| Što radi Ingestor? | 60% | 265.6 | 0 |
-| Tko su članovi tima? | 80% | 394.9 | 0 |
-| Što je Temporal Truth? | 75% | 402.2 | 0 |
-| Kako se radi backup? | 50% | 270.1 | 0 |
-| Što je MCP? | 100% | 306.9 | 0 |
-| Kako radi Watcher? | 25% | 284.6 | 0 |
-| Što je Extractor? | 80% | 354.2 | 0 |
-| Kako radi rebuild? | 75% | 526.3 | 0 |
+| Koju bazu podataka koristimo za projekt? | 0% | 80555.1 | 0 |
+| Što radi Curator modul? | 50% | 11115.7 | 3 |
+| Kako se pokreće interaktivni chat? | 0% | 3096.8 | 4 |
+| Što je Historian? | 33% | 5497.6 | 4 |
+| Tko je autor projekta? | 0% | 5439.4 | 4 |

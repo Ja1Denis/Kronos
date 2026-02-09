@@ -1,108 +1,45 @@
 [
     {
-        "query": "Što je Librarian?",
+        "query": "Koju bazu podataka koristimo za projekt?",
         "expected_keywords": [
-            "librarian",
-            "sqlite",
-            "fts5",
-            "metadata",
+            "PostgreSQL",
             "baza"
         ],
-        "project": "kronos"
+        "project": "test_proj"
     },
     {
-        "query": "Kako radi Oracle?",
+        "query": "Što radi Curator modul?",
         "expected_keywords": [
-            "oracle",
-            "hybrid",
-            "search",
-            "vector",
-            "fts"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Što radi Ingestor?",
-        "expected_keywords": [
-            "ingestor",
-            "chunking",
-            "vektorizacija",
-            "md",
-            "file"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Tko su članovi tima?",
-        "expected_keywords": [
-            "librarian",
-            "oracle",
-            "ingestor",
-            "watcher",
-            "extractor"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Što je Temporal Truth?",
-        "expected_keywords": [
-            "valid_from",
-            "valid_to",
-            "superseded_by",
-            "vrijeme"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Kako se radi backup?",
-        "expected_keywords": [
-            "backup",
-            "zip",
-            "data",
-            "sigurnosna"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Što je MCP?",
-        "expected_keywords": [
-            "model",
-            "context",
-            "protocol",
-            "server",
-            "claude"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Kako radi Watcher?",
-        "expected_keywords": [
-            "watcher",
-            "promjene",
-            "automatski",
-            "reindeksiranje"
-        ],
-        "project": "kronos"
-    },
-    {
-        "query": "Što je Extractor?",
-        "expected_keywords": [
-            "extractor",
-            "strukturirano",
+            "Curator",
+            "duplikate",
             "znanje",
-            "regex",
-            "json"
+            "rudarenje"
         ],
-        "project": "kronos"
+        "project": null
     },
     {
-        "query": "Kako radi rebuild?",
+        "query": "Kako se pokreće interaktivni chat?",
         "expected_keywords": [
-            "rebuild",
-            "archive",
-            "jsonl",
-            "rekonstrukcija"
+            "chat",
+            "main.py"
         ],
-        "project": "kronos"
+        "project": null
+    },
+    {
+        "query": "Što je Historian?",
+        "expected_keywords": [
+            "Historian",
+            "kontradikcije",
+            "pamćenje"
+        ],
+        "project": null
+    },
+    {
+        "query": "Tko je autor projekta?",
+        "expected_keywords": [
+            "Denis",
+            "Google Deepmind"
+        ],
+        "project": null
     }
 ]

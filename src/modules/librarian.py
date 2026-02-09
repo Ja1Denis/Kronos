@@ -56,7 +56,8 @@ class Librarian:
 
     def _init_sqlite(self):
         """Kreira tablice za praćenje datoteka i FTS pretragu."""
-        conn = sqlite3.connect(self.meta_path)
+        # Timeout od 30 sekundi za lock waits (default je 5)
+        conn = sqlite3.connect(self.meta_path, timeout=30)
         cursor = conn.cursor()
         
         # 1. Tabela za praćenje promjena datoteka

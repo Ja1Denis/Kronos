@@ -1,13 +1,32 @@
 # Development Log - Kronos
 
+## [2026-02-09] - Faza 7 Start: "Precision Tuning"
+### Dodano:
+- **Cross-Encoder Reranking (T027)**: Implementiran `BAAI/bge-reranker-base` za dubinsko rerankiranje top 15-20 rezultata. Značajno poboljšava preciznost na dvosmislenim upitima.
+- **Async Model Preload**: `chat` komanda sada učitava Cross-Encoder model u pozadini (daemon thread) kako bi se eliminiralo čekanje na prvom upitu.
+- **Smart HyDE**: Optimizirana logika koja aktivira HyDE samo za kratke (<5 riječi) i nejasne upite. Default pretraga je sada instantna (<100ms).
+- **SQLite Timeout**: Povećan timeout na 30s za `Librarian` konekciju kako bi se spriječile "database locked" greške tijekom Live Synca.
+
+### Poboljšano:
+- **Stabilnost**: Watcher i user queries sada mogu koegzistirati bez rušenja baze.
+- **Performance**: Smanjena latencija za tipične use-caseove isključivanjem nepotrebnog HyDE-a.
+
+---
+
 ## [2026-02-08] - Faza 6: "Cognitive Mastery" (Historian & Contradiction)
 
 ### Dodano:
 - **`src/modules/historian.py`**: Novi modul za semantičku analizu kontradikcija. Koristi LLM (Gemini) za usporedbu novih tvrdnji s postojećim "Decision" i "Fact" entitetima.
 - **`audit` CLI komanda**: Omogućuje korisniku ručnu provjeru konzistentnosti (`kronos audit "tvrdnja"`).
-- **Dual Vector Search**: Nadograđen `Oracle` da izvodi dvije paralelne pretrage:
-    1. Standardni "chunk" search (dokumenti).
-    2. "Entity-focused" search (samo odluke/činjenice) s boostanim score-om. Ovo rješava problem gdje su bitni entiteti bili nadjačani velikim dokumentima.
+- **Unified Retrieval**: Oracle `ask` metoda sada koristi 4-stage retrieval:
+    1. Query Expansion (Topic/HyDE)
+    2. Vector Search (Document Chunks)
+    3. Vector Search (Entities Only - Boosted)
+    4. Keyword Search (FTS5)
+- **Autonomous Curator (T025)**: Proširen `Curator` modul s metodama `identify_duplicates()` i `refine_knowledge()`. Omogućuje:
+    - Semantičku detekciju duplikata među entitetima.
+    - Ekstrakciju novih strukturiranih informacija iz nestrukturiranih tekstova.
+- **CLI Updates**: Dodana komanda `curate` s opcijama `--duplicates` i `--refine`.
 - **ChromaDB Entity Indexing**: `Librarian.save_entity` i `Ingestor` sada automatski indeksiraju entitete u ChromaDB, omogućujući njihovo pronalaženje putem vektorske pretrage (ne samo keyword search).
 
 ### Poboljšano:

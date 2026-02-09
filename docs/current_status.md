@@ -4,6 +4,18 @@ Datum: 2026-02-08 H2
 ## 🚀 Status: Faza 6 U Tijeku (Cognitive Mastery)
 Projekt je tranziciji iz Faze 5 u **Fazu 6 (Cognitive Mastery)**, s fokusom na autonomiju i naprednu detekciju konzistentnosti.
 
+### 09.02.2026. (H0) - Autonomni Kustos (Curator)
+- **Autonomous Curator (T025)**: Dovršen modul za samostalno održavanje baze znanja.
+- **Duplicate Detection**: `curate --duplicates` pronalazi semantičke duplikate među odlukama (npr. "Koristimo SQLite" vs "Baza je SQLite").
+- **Knowledge Mining**: `curate --refine` skenira nestrukturirane tekstove i predlaže nove strukturirane entitete (Odluke/Činjenice).
+- **Historian Audit**: Integriran alat za provjeru konzistentnosti (`audit`).
+
+### 09.02.2026. (H3) - Precision Tuning (Faza 7 Start)
+- **Cross-Encoder Reranking (T027)**: Implementiran `BAAI/bge-reranker-base` model u `Oracle` pipeline.
+    - Sustav sada uzima top 15 kandidata (3x limit) i re-rankira ih dubokom analizom konteksta.
+    - Lazy loading modela osigurava brz startup CLI alata.
+- **Benchmark**: Inicijalni rezulati (Recall@5 ~16.7%) ukazuju na potrebu za daljnjim finetuningom ili boljom pripremom testnih podataka. Mehanizam je funkcionalan.
+
 ### 08.02.2026. (H2) - Implementacija Historiana i Contradiction Detection
 - **Historian Module (T026)**: Implementirana detekcija semantičkih kontradikcija između novih unosa i postojećeg znanja. Koristi LLM za analizu konflikata.
 - **Audit Command**: Dodana `kronos audit "tvrdnja"` komanda za brzu provjeru konzistentnosti.
@@ -32,8 +44,8 @@ Projekt je tranziciji iz Faze 5 u **Fazu 6 (Cognitive Mastery)**, s fokusom na a
 - **Benchmark Suite**: Sustav za mjerenje točnosti (70.5% Recall@5).
 
 ### 🚧 Trenutni Fokus (Faza 6):
-- **Autonomous Curator**: Samostalno upravljanje životnim ciklusom informacija.
-- **Precision Tuning**: Cilj 85% Recall.
+- **Precision Tuning**: Implementacija Cross-Encodera i finetuning embeddinga (T027).
+- **RAG Evaluation**: Proširenje benchmark skripte.
 
 ### 📊 Statistika Baze:
 - **Indeksirano datoteka**: ~2400 (uključujući testne projekte)
