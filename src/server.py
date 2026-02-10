@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import sys
+import time
 
 from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
@@ -14,6 +15,12 @@ app = FastAPI(title="Kronos API", description="Semantička Memorija za AI Agente
 class QueryRequest(BaseModel):
     text: str
     limit: Optional[int] = 5
+    # New Context Budgeter params
+    cursor_context: Optional[str] = None
+    current_file_path: Optional[str] = None
+    budget_tokens: Optional[int] = 4000
+    mode: Optional[str] = "budget" # auto, budget, debug
+    stack_trace: Optional[str] = None
 
 class IngestRequest(BaseModel):
     path: str
@@ -48,17 +55,126 @@ def ingest_data(request: IngestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# SINGLETON ORACLE INSTANCE
+# To prevent database locking and overhead of reloading models
+_oracle_instance = None
+
+def get_oracle():
+    global _oracle_instance
+    if _oracle_instance is None:
+        print("🔧 Initializing Singleton Oracle...")
+        _oracle_instance = Oracle()
+    return _oracle_instance
+
 @app.post("/query")
 def query_memory(request: QueryRequest):
-    """Pretražuje semantičku memoriju."""
+    """Pretražuje semantičku memoriju i vraća optimizirani kontekst (Context Budgeter)."""
     try:
-        oracle = Oracle()
-        results = oracle.ask(request.text, limit=request.limit, silent=True)
+        oracle = get_oracle() # Use singleton
+        
+        # 1. Retrieve candidates
+        # Note: Oracle.ask returns dict {'entities': [...], 'chunks': [...]}
+        retrieval_results = oracle.ask(request.text, limit=request.limit or 5, silent=True)
+        
+        # 2. Initialize ContextComposer
+        from src.modules.context_budgeter import ContextComposer, ContextItem, BudgetConfig
+        
+        config = BudgetConfig(global_limit=request.budget_tokens or 4000)
+        
+        # Audit Log (Server Side)
+        print(f"[{request.mode}] Query: '{request.text}' | Budget: {config.global_limit} | Cursor: {bool(request.cursor_context)} | File: {request.current_file_path}")
+        
+        composer = ContextComposer(config)
+        
+        # 3. Add Cursor Context (Priority 1)
+        if request.cursor_context:
+            composer.add_item(ContextItem(
+                content=request.cursor_context,
+                kind="cursor",
+                source=request.current_file_path or "ACTIVE_EDITOR",
+                utility_score=1.0
+            ))
+            
+        # 3b. Debug Mode: Process Stack Trace (High Priority)
+        # Ako imamo stack trace, parsiramo ga i dodajemo pronađene fajlove kao High Priority Chunks/Evidence
+        if request.stack_trace:
+            from src.utils.stack_parser import StackTraceParser
+            trace_locations = StackTraceParser.parse(request.stack_trace)
+            
+            # Dodaj sam stack trace kao context
+            composer.add_item(ContextItem(
+                content=request.stack_trace,
+                kind="evidence",
+                source="StackTrace",
+                utility_score=1.0 # Critical
+            ))
+            
+            for loc in trace_locations:
+                # Ovdje bi idealno trebali pročitati stvarni sadržaj datoteke
+                # Za sada samo logiramo da smo našli lokaciju
+                # TODO: Implementirati 'SnippetReader' koji čita +/- 10 linija oko loc['line']
+                
+                # Pokušajmo pročitati snippet ako fajl postoji
+                fpath = loc.get('file')
+                lineno = loc.get('line', 1)
+                
+                if fpath and os.path.exists(fpath):
+                    try:
+                        # Diff Corpse: Check if modified recently (last 1h)
+                        mtime = os.path.getmtime(fpath)
+                        is_recent = (time.time() - mtime) < 3600
+                        recent_tag = " [RECENTLY MODIFIED]" if is_recent else ""
+                        
+                        with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                            lines = f.readlines()
+                            start = max(0, lineno - 5)
+                            end = min(len(lines), lineno + 5)
+                            snippet = "".join(lines[start:end])
+                            
+                            composer.add_item(ContextItem(
+                                content=f"--- SNIPPET FROM TRACE{recent_tag} ---\nLine {lineno}:\n{snippet}",
+                                kind="evidence",
+                                source=f"{os.path.basename(fpath)}:{lineno}",
+                                utility_score=0.95 + (0.05 if is_recent else 0) # Boost if recent
+                            ))
+                    except Exception as e:
+                        print(f"Error reading trace file {fpath}: {e}")
+            
+        # 4. Add Entities & Chunks...
+        for ent in retrieval_results.get("entities", []):
+            composer.add_item(ContextItem(
+                content=ent["content"],
+                kind="entity",
+                source=ent["metadata"].get("source", "unknown"),
+                utility_score=0.9
+            ))
+            
+        for chunk in retrieval_results.get("chunks", []):
+            composer.add_item(ContextItem(
+                content=chunk["content"],
+                kind="chunk",
+                source=chunk["metadata"].get("source", "unknown"),
+                utility_score=chunk.get("score", 0.5)
+            ))
+            
+        # 6. Compose Final Context
+        final_context = composer.compose()
+        audit_log = composer.get_audit_report()
+        
         return {
             "query": request.text,
-            "results": results
+            "context": final_context,
+            "audit": audit_log,
+            "parsed_trace": bool(request.stack_trace),
+            "stats": {
+                "used_tokens": composer.current_tokens,
+                "global_limit": composer.config.global_limit,
+                "items_count": len(composer.items)
+            }
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stats")
@@ -253,6 +369,12 @@ def startup_event():
     """Pokreće watcher u pozadini pri startu servera."""
     import threading
     from src.modules.watcher import Watcher
+    
+    # Warmup Singleton Oracle
+    try:
+        get_oracle()
+    except Exception as e:
+        print(f"❌ Failed to init Oracle: {e}")
     
     def run_watcher():
         watcher = Watcher(path=".") # Prati cijeli projektni root

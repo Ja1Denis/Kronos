@@ -1,5 +1,24 @@
 # Development Log - Kronos
 
+## [2026-02-10] - Faza 7: Context Budgeter (Milestone 1)
+### Implementirano:
+- **T028-T031: Context Budgeter Core**:
+    - Kreiran `ContextComposer` (src/modules/context_budgeter.py) za pametno upravljanje kontekstom.
+    - Implementiran **Greedy Algorithm** za popunjavanje budžeta (4000 tokena) s prioritetima: Cursor > Entities > Chunks.
+    - Uvedeni limiti: Global (4000), File (3 chunka/900 tokena), Entity (800 tokena).
+    - **Entity One-liners**: Entiteti se sada formatiraju kao sažeti jednolinijski opisi radi uštede prostora.
+- **API Update**: `/query` endpoint sada vraća optimizirani `context` string umjesto sirovih rezultata.
+- **CLI Update**: `ask_fast.ps1` ažuriran da podržava:
+    - Slanje `CursorContext` i `CurrentFilePath` parametara.
+    - Prikaz formatiranog konteksta i audit loga (potrošnja tokena, odbijeni kandidati).
+- **T032-T034: Debug Repro Pack**:
+    - **Stack Trace Parser**: `src/utils/stack_parser.py` izvlači putanje datoteka i linije iz error logova.
+    - **Debug Mode**: Ako API primi `stack_trace`, automatski aktivira "Trace Anchors" mehanizam.
+    - **The Three Corpses (Partial)**:
+        - **Code**: Kronos čita ±5 linija oko svake greške u trace-u i dodaje ih u kontekst (Priority: 0.95).
+        - **Diffs**: Ako je datoteka iz trace-a modificirana u zadnjih sat vremena, dobiva oznaku `[RECENTLY MODIFIED]` i boost prioriteta.
+    - **CLI Support**: `ask_fast.ps1 -TraceFile "error.log"` šalje sadržaj loga serveru na analizu.
+
 ## [2026-02-09] - Baseline Freeze: Kronos v2.0.0-evolution
 ### Odluka:
 - **Verzija Kronosa (Faza 6) se službeno postavlja kao DEFAULTNA verzija za budući rad.**
