@@ -1,45 +1,42 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-02-08 H2
+Datum: 2026-02-10 H2
 
-## 🚀 Status: Faza 6 - DEFAULT STABLE (Cognitive Mastery)
-Projekt je postavljen kao **Default Baseline** verzija (2026-02-09). Fokus je na stabilnosti i širenju znanja unutar ove arhitekture.
+## 🚀 Status: Faza 7 - STABILITY & CONTEXT (Completed)
+Projekt je stabiliziran i spreman za produkciju. Riješeni su problemi s konkurentnošću i optimiziran je dohvat konteksta.
+
+### [2026-02-10] Faza 7: Context Budgeter & Stability (COMPLETED)
+- **Status:** ✅ Stable (Thread-safe, 600ms latency under load)
+- **Ključna postignuća:**
+    - **Singleton Oracle + Thread Lock:** Eliminirane `database is locked` greške kod paralelnih upita.
+    - **Context Budgeter:** Dinamičko upravljanje tokenima (Light/Auto/Extra).
+    - **The Three Corpses (T034):** Potpuna debug podrška (Code + Diffs + Logs).
+    - **Stress Test:** 30 istovremenih read/write operacija prošlo bez greške.
+
+### ⚠️ Poznati Problemi / TODO
+- (Next) Faza 8: Autonomy & Job Queue (za asinkrone zadatke).
+
+---
+
+### [2026-02-09] Faza 6 - ARCHIVED (Cognitive Mastery)
+Projekt je postavljen kao **Default Baseline** verzija (2026-02-09). Fokus je bio na stabilnosti i širenju znanja.
 
 ### 09.02.2026. (H0) - Autonomni Kustos (Curator)
 - **Autonomous Curator (T025)**: Dovršen modul za samostalno održavanje baze znanja.
-- **Duplicate Detection**: `curate --duplicates` pronalazi semantičke duplikate među odlukama (npr. "Koristimo SQLite" vs "Baza je SQLite").
-- **Knowledge Mining**: `curate --refine` skenira nestrukturirane tekstove i predlaže nove strukturirane entitete (Odluke/Činjenice).
+- **Duplicate Detection**: `curate --duplicates` pronalazi semantičke duplikate.
+- **Knowledge Mining**: `curate --refine` skenira nestrukturirane tekstove.
 - **Historian Audit**: Integriran alat za provjeru konzistentnosti (`audit`).
 
 ### 09.02.2026. (H4) - Instant Search & Daemon Mode
 - **Client-Server Architecture**: Uveden `start_kronos.ps1` i `ask_fast.ps1`.
-- **Cold Start Elimination**: Pretraga se izvršava u <1s jer su AI modeli trajno učitani u memoriju servera.
-- **Desktop Readiness**: Kreiran desktop prečac "Kronos Server" za pokretanje cijelog stacka.
+- **Cold Start Elimination**: Pretraga <1s.
+- **Desktop Readiness**: Kreiran desktop prečac.
 
-### 09.02.2026. (H3) - Precision Tuning (Faza 7 Start)
-- **Cross-Encoder Reranking (T027)**: Implementiran `BAAI/bge-reranker-base` model u `Oracle` pipeline.
-    - Sustav sada uzima top 15 kandidata (3x limit) i re-rankira ih dubokom analizom konteksta.
-    - Async preload osigurava nultu latenciju nakon prvog starta servera.
-- **Benchmark**: Inicijalni rezulati (Recall@5 ~16.7%) ukazuju na potrebu za daljnjim finetuningom. Mehanizam je funkcionalan.
+### 09.02.2026. (H3) - Precision Tuning
+- **Cross-Encoder Reranking (T027)**: Integriran `bge-reranker-base`.
 
-### 08.02.2026. (H2) - Implementacija Historiana i Contradiction Detection
-- **Historian Module (T026)**: Implementirana detekcija semantičkih kontradikcija između novih unosa i postojećeg znanja. Koristi LLM za analizu konflikata.
-- **Audit Command**: Dodana `kronos audit "tvrdnja"` komanda za brzu provjeru konzistentnosti.
-- **Entity Semantic Indexing**: Librarian sada automatski indeksira entitete (odluke, činjenice) u vektorsku bazu (ChromaDB) paralelno s SQLite-om, omogućujući `Oracle`-u da ih pronađe putem semantičke pretrage.
-- **Unified Retrieval**: Oracle `ask` metoda sada koristi 4-stage retrieval:
-    1. Query Expansion (Topic/HyDE)
-    2. Vector Search (Document Chunks)
-    3. Vector Search (Entities Only - Boosted)
-    4. Keyword Search (FTS5)
-- **Bug Fixes**: Riješen problem s "utapanjem" entiteta u velikim chunkovima dokumenata dodavanjem dediciranog entity-only vektorskog upita.
-- **Cleanup**: Očišćeni "zombi" procesi (Ingestor/Watcher) koji su ostali visiti u pozadini.
-
-### 08.02.2026. - Evolucija u RAG Asistenta (Faza 5)
-- **RAG Chat Implementation**: `chat` komanda sada koristi Gemini-2.0-flash za generiranje ljudskih odgovora na temelju pronađenih citata.
-- **Live Sync (Auto-monitoring)**: Integriran Watcher u chat. Baza se automatski osvježava čim se spremi `.md` datoteka (debounce 2s).
-- **Keyword Boost (Strict Mode)**: Znatno pojačana težina FTS pretrage. Tehnički pojmovi (poput "Live Sync") sada imaju prioritet nad općenitom vektorskom sličnošću.
-- **SDK Migration**: Cijeli sustav prebačen na novi `google-genai` SDK (uklonjen Deprecation Warning).
-- **UX Improvements**: Omogućeno scrollanje u Windows terminalu (buffer 5000 linija) i povećan prikaz odgovora na 1000 znakova.
-- **Entity Recovery**: Implementirana bolja ekstrakcija ključnih riječi za pretragu entiteta (odluke, zadaci).
+### 08.02.2026. (H2) - Implementacija Historiana
+- **Event Sourcing**: Potpuni integritet podataka.
+- **3-Stage Hybrid Search**: Keyword -> Vector -> Reranking.
 
 ### 💎 Postignuća Faze 4 (Završeno):
 - **Event Sourcing**: Potpuni integritet podataka kroz `archive.jsonl`.

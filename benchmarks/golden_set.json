@@ -1,0 +1,48 @@
+[
+    {
+        "query": "Što je Kronos?",
+        "expected_substrings": [
+            "semantička memorija",
+            "memorijski sustav",
+            "AI agent"
+        ],
+        "max_latency_ms": 1000
+    },
+    {
+        "query": "Koji je limit tokena za Context Budgeter?",
+        "expected_substrings": [
+            "4000",
+            "global_limit",
+            "BudgetConfig"
+        ],
+        "max_latency_ms": 1500
+    },
+    {
+        "query": "Koji parametri se šalju u ask_fast.ps1?",
+        "expected_substrings": [
+            "Query",
+            "CursorContext",
+            "BudgetTokens",
+            "Mode"
+        ],
+        "max_latency_ms": 2000
+    },
+    {
+        "query": "Kako radi Singleton Oracle?",
+        "expected_substrings": [
+            "instance",
+            "_oracle_instance",
+            "server.py"
+        ],
+        "max_latency_ms": 2000
+    },
+    {
+        "query": "Daj mi detalje o T034.",
+        "expected_substrings": [
+            "Specialized Retrieval",
+            "Three Corpses",
+            "Diffs"
+        ],
+        "max_latency_ms": 1500
+    }
+]

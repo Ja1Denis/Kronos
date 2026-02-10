@@ -1,7 +1,7 @@
 param (
     [Parameter(Mandatory = $true)]
     [string]$Query,
-    [int]$Limit = 5,
+    [int]$Limit = 30,
     [string]$CursorContext = "",
     [string]$CurrentFilePath = "",
     [int]$BudgetTokens = 4000,

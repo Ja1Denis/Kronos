@@ -23,6 +23,31 @@ class BudgetConfig:
     chunk_hard_cap: int = 600  # Trim if larger than this
     chunk_fat_threshold: int = 900 # Never raw, only excerpt (though hard cap handles this mostly)
 
+    @staticmethod
+    def from_profile(name: str):
+        """Returns a predefined budget configuration."""
+        if name == "light":
+            return BudgetConfig(
+                global_limit=2000,
+                briefing_limit=200,
+                entities_limit=400,
+                chunks_limit=1400,
+                file_max_chunks=2,
+                file_max_tokens=600
+            )
+        elif name == "extra": # Za velike code refaktore
+            return BudgetConfig(
+                global_limit=8000,
+                briefing_limit=500,
+                entities_limit=1500,
+                chunks_limit=5000,
+                recent_changes_limit=500,
+                file_max_chunks=5,
+                file_max_tokens=2000
+            )
+        else: # Normal / Default
+            return BudgetConfig()
+
 @dataclass
 class ContextItem:
     content: str

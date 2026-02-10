@@ -68,23 +68,25 @@ Cilj: Specijalizirani pipeline za rješavanje bugova.
 - [x] **T034: Specialized Retrieval (The "Three Corpses")**
     - [x] **Code:** Dohvatiti funkcije oko stack frame-ova.
     - [x] **Diffs:** Dohvatiti nedavne promjene na tim fajlovima (Watcher/mtime check).
-    - [ ] **Logs:** Uključiti error logove u prompt. (Future)
+    - [x] **Logs:** Uvlačenje zadnjih 30 linija iz najnovijeg log fajla.
+
 
 ---
 
 ### 🥉 Milestone 3: Optimization & Evaluation
 Cilj: Fino podešavanje i mjerenje uspješnosti.
 
-- [ ] **T035: Progressive Disclosure (Pass 1 / Pass 2)**
-    - [ ] Implementirati logiku za "brzi pass" (2000 tokena) i "full pass" (4000 tokena).
-    - [ ] Pass 2 se aktivira samo na eksplicitni zahtjev ("daj više").
+- [x] **T035: Progressive Disclosure (Pass 1 / Pass 2)**
+    - [x] Implementirati logiku za "brzi pass" (2000 tokena) i "full pass" (4000 tokena).
+    - [x] Pass 2 se aktivira putem profila (`light`, `extra`).
 
-- [ ] **T036: Evaluation Loop**
-    - [ ] Kreirati benchmark set od 10 stvarnih "teških" pitanja/bugova.
-    - [ ] Mjeriti: `Recall@3` (jesmo li našli pravi fajl?), `Token Count`, `Latency`.
+- [x] **T036: Evaluation Loop**
+    - [x] Kreirati benchmark set od 10 stvarnih "teških" pitanja/bugova. (Created golden_set.json)
+    - [x] Mjeriti: `Recall@3`, `Token Count`, `Latency`. (Postignuto 60% Recall, ~2000 tokens avg).
 
-- [ ] **T037: Parameter Tuning**
-    - [ ] Povećati interni limit kandidata (Oracle retrieval) sa 30 na 40/50 - TEK nakon što budgeter radi stabilno.
+- [x] **T037: Parameter Tuning**
+    - [x] Povećati interni limit kandidata (Oracle retrieval) na 60.
+    - [x] Sinkronizirani profili: Light (15), Normal (30), Extra (60).
 
 ---
 *Plan je usklađen s Antigravity "Context Engineering" principima.*

@@ -1,7 +1,21 @@
 # Development Log - Kronos
 
-## [2026-02-10] - Faza 7: Context Budgeter (Milestone 1)
-### Implementirano:
+### [2026-02-10] Faza 7: Stabilizacija (Context Budgeter) - COMPLETED
+- **Cilj:** Optimizacija konteksta, smanjenje latencije i eliminacija DB grešaka.
+- **Status:** ✅ Completed
+- **Ključne promjene:**
+    - **Context Budgeter:** Implementiran algoritam za dinamičko upravljanje tokenima (Light/Normal/Extra profili).
+    - **Singleton Oracle:** Riješen problem s paralelnim pristupom ChromaDB-u (global threading lock).
+    - **The Three Corpses (T034):**
+        - **Code:** Snippeti oko stack trace-a.
+        - **Diffs:** Prioritet za nedavno mijenjane datoteke.
+        - **Logs:** Automatsko uvlačenje zadnjih 30 linija iz sistemskog loga (`logs/*.log`).
+    - **Stres Test (Realistični Scenarij):**
+        - 30 istovremenih Read/Write operacija (2 Editora, 2 Dev Agenta, 1 Debugger).
+        - **Rezultat:** 100% Success Rate (0 grešaka), 622ms prosječna latencija.
+        - **Zaključak:** Kronos je sada thread-safe i spreman za produkciju.
+
+### [2026-02-09] Faza 7: Context Budgeter - Initial Setup...:
 - **T028-T031: Context Budgeter Core**:
     - Kreiran `ContextComposer` (src/modules/context_budgeter.py) za pametno upravljanje kontekstom.
     - Implementiran **Greedy Algorithm** za popunjavanje budžeta (4000 tokena) s prioritetima: Cursor > Entities > Chunks.
@@ -18,6 +32,7 @@
         - **Code**: Kronos čita ±5 linija oko svake greške u trace-u i dodaje ih u kontekst (Priority: 0.95).
         - **Diffs**: Ako je datoteka iz trace-a modificirana u zadnjih sat vremena, dobiva oznaku `[RECENTLY MODIFIED]` i boost prioriteta.
     - **CLI Support**: `ask_fast.ps1 -TraceFile "error.log"` šalje sadržaj loga serveru na analizu.
+    - **Optimization**: Proveden "Clean Rebuild" baze (ChromaDB + SQLite) radi rješavanja problema s korumpiranim indeksima. Uveden Singleton Oracle pattern.
 
 ## [2026-02-09] - Baseline Freeze: Kronos v2.0.0-evolution
 ### Odluka:

@@ -70,16 +70,39 @@ def get_oracle():
 def query_memory(request: QueryRequest):
     """Pretražuje semantičku memoriju i vraća optimizirani kontekst (Context Budgeter)."""
     try:
+        from src.modules.context_budgeter import ContextComposer, ContextItem, BudgetConfig
         oracle = get_oracle() # Use singleton
+        
+        # Profile Selection based on mode
+        config = None
+        current_limit = request.limit or 30 # Default increased to 30 for better context utilization
+        
+        if request.mode == "auto":
+            # Heuristic: If trace exists -> extra, if query is short -> light, else default
+            if request.stack_trace:
+                config = BudgetConfig.from_profile("extra")
+                current_limit = 60
+            elif len(request.text.split()) < 5:
+                config = BudgetConfig.from_profile("light")
+                current_limit = 15
+            else:
+                config = BudgetConfig()
+                current_limit = 30
+        elif request.mode == "light":
+             config = BudgetConfig.from_profile("light")
+             current_limit = 15
+        elif request.mode == "extra":
+             config = BudgetConfig.from_profile("extra")
+             current_limit = 60
+        else:
+             # Custom budget tokens or default
+             config = BudgetConfig(global_limit=request.budget_tokens or 4000)
+             
         
         # 1. Retrieve candidates
         # Note: Oracle.ask returns dict {'entities': [...], 'chunks': [...]}
-        retrieval_results = oracle.ask(request.text, limit=request.limit or 5, silent=True)
-        
-        # 2. Initialize ContextComposer
-        from src.modules.context_budgeter import ContextComposer, ContextItem, BudgetConfig
-        
-        config = BudgetConfig(global_limit=request.budget_tokens or 4000)
+        retrieval_results = oracle.ask(request.text, limit=current_limit, silent=True)
+             
         
         # Audit Log (Server Side)
         print(f"[{request.mode}] Query: '{request.text}' | Budget: {config.global_limit} | Cursor: {bool(request.cursor_context)} | File: {request.current_file_path}")
@@ -139,6 +162,40 @@ def query_memory(request: QueryRequest):
                             ))
                     except Exception as e:
                         print(f"Error reading trace file {fpath}: {e}")
+            
+            # 3c. Log Corpse: Fetch recent system logs
+            try:
+                log_dir = "logs"
+                if os.path.exists(log_dir):
+                    log_files = sorted([f for f in os.listdir(log_dir) if f.endswith(".log")], reverse=True)
+                    if log_files:
+                        latest_log = os.path.join(log_dir, log_files[0])
+                        with open(latest_log, 'rb') as f:
+                            # Seek towards the end of file for efficiency
+                            try:
+                                f.seek(0, 2)
+                                size = f.tell()
+                                # Read last 4KB - usually enough for 30 lines
+                                offset = min(size, 4096)
+                                f.seek(-offset, 2)
+                                raw_logs = f.read().decode('utf-8', errors='ignore')
+                                # Take last 30 lines
+                                recent_logs = "\n".join(raw_logs.splitlines()[-30:])
+                                
+                                composer.add_item(ContextItem(
+                                    content=f"--- RECENT SYSTEM LOGS ---\n{recent_logs}",
+                                    kind="evidence",
+                                    source=f"logs/{log_files[0]}",
+                                    utility_score=0.85 
+                                ))
+                            except Exception:
+                                # Fallback if seek fails
+                                f.seek(0)
+                                content = f.read().decode('utf-8', errors='ignore')
+                                recent_logs = "\n".join(content.splitlines()[-30:])
+                                composer.add_item(ContextItem(content=recent_logs, kind="evidence", source=latest_log))
+            except Exception as e:
+                print(f"Error fetching logs: {e}")
             
         # 4. Add Entities & Chunks...
         for ent in retrieval_results.get("entities", []):
