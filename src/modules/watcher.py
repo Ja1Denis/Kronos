@@ -1,63 +1,104 @@
 import os
 import time
+import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from src.modules.ingestor import Ingestor
+from src.modules.job_manager import JobManager
 from src.utils.logger import logger
 
-from threading import Timer
-
-class DebouncedEventHandler(FileSystemEventHandler):
-    """Handler koji koristi debounce tehniku za stabilnije praćenje promjena."""
+class BatchJobEventHandler(FileSystemEventHandler):
+    """
+    Handler koji prikuplja promjene i šalje ih kao batch job u JobManager.
+    """
     
-    def __init__(self, ingestor, debounce_interval=2.0):
-        self.ingestor = ingestor
+    def __init__(self, debounce_interval=5.0, max_batch_size=20):
+        self.job_manager = JobManager()
         self.debounce_interval = debounce_interval
-        self.timers = {}
+        self.max_batch_size = max_batch_size
+        
+        self.pending_files = set()
+        self.timer = None
+        self.lock = threading.Lock()
 
     def on_modified(self, event):
-        if not event.is_directory and any(event.src_path.endswith(ext) for ext in ['.md', '.txt', '.php', '.js']):
-            self._schedule_processing(event.src_path)
+        if self._is_relevant(event):
+            self._add_to_batch(event.src_path)
 
     def on_created(self, event):
-        if not event.is_directory and any(event.src_path.endswith(ext) for ext in ['.md', '.txt', '.php', '.js']):
-            self._schedule_processing(event.src_path)
+        if self._is_relevant(event):
+            self._add_to_batch(event.src_path)
 
-    def _schedule_processing(self, file_path):
-        """Zadaje zadatak s odgodom. Ako se dogodi novi event, resetira timer."""
-        if file_path in self.timers:
-            self.timers[file_path].cancel()
-        
-        logger.info(f"⏳ Detektirane promjene na {os.path.basename(file_path)}, čekam stabilizaciju...")
-        
-        timer = Timer(self.debounce_interval, self._process_file, args=[file_path])
-        self.timers[file_path] = timer
-        timer.start()
-
-    def _process_file(self, file_path):
-        """Callback funkcija koja se izvršava nakon isteka timera."""
-        if file_path in self.timers:
-            del self.timers[file_path]
+    def _is_relevant(self, event):
+        """Provjerava je li datoteka relevantna za Kronos."""
+        if event.is_directory:
+            return False
             
-        logger.info(f"🔄 Procesiram: {os.path.basename(file_path)}")
-        try:
-            self.ingestor._process_file(file_path, silent=False)
-        except Exception as e:
-            logger.error(f"Greška tijekom procesiranja {file_path}: {e}")
+        # Ignoriraj baze podataka i privremene datoteke
+        if any(x in event.src_path for x in ['.db', '.store', '.gemini', '.git', '__pycache__', 'test_output.txt']):
+             return False
+             
+        # Relevantne ekstenzije
+        return any(event.src_path.endswith(ext) for ext in ['.md', '.txt', '.php', '.js', '.py'])
+
+    def _add_to_batch(self, file_path):
+        """Dodaje datoteku u batch i (re)starta timer."""
+        with self.lock:
+            self.pending_files.add(os.path.abspath(file_path))
+            
+            # Ako smo dosegli max size, šalji odmah
+            if len(self.pending_files) >= self.max_batch_size:
+                self._submit_batch()
+                return
+
+            # Resetira ili pokreće timer
+            if self.timer:
+                self.timer.cancel()
+            
+            self.timer = threading.Timer(self.debounce_interval, self._submit_batch)
+            self.timer.start()
+            logger.info(f"⏳ Detektirana promjena: {os.path.basename(file_path)}. Batch size: {len(self.pending_files)}")
+
+    def _submit_batch(self):
+        """Šalje prikupljene datoteke u JobManager."""
+        with self.lock:
+            if not self.pending_files:
+                return
+
+            files_to_process = list(self.pending_files)
+            self.pending_files.clear()
+            
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
+
+            # Kreiraj Job
+            # Pokušavamo detektirati zajednički projekt iz prve datoteke (približno)
+            project_name = "default"
+            # TODO: Naprednije detektiranje projekta ako je potrebno
+            
+            job_id = self.job_manager.submit_job(
+                job_type="ingest_batch",
+                params={
+                    "files": files_to_process,
+                    "project": project_name
+                },
+                priority=3 # Niži prioritet od manualnog 'ask' ili direktnog 'ingest'
+            )
+            
+            logger.success(f"🚀 Watcher poslao batch posao {job_id} ({len(files_to_process)} datoteka)")
 
 class Watcher:
-    """Glavna klasa za nadzor foldera."""
+    """Glavna klasa za nadzor foldera (Faza 8 - Job Queue version)."""
     
-    def __init__(self, path=".", recursive=True):
+    def __init__(self, path=".", recursive=True, debounce=5.0):
         self.path = path
         self.recursive = recursive
-        self.ingestor = Ingestor()
-        self.event_handler = DebouncedEventHandler(self.ingestor)
+        self.event_handler = BatchJobEventHandler(debounce_interval=debounce)
         self.observer = Observer()
 
     def start(self):
         """Pokreće observer u pozadinskoj niti."""
-        logger.info(f"👀 Kronos Watcher pokrenut na: {os.path.abspath(self.path)}")
+        logger.info(f"👀 Kronos Watcher (Batch Mode) pokrenut na: {os.path.abspath(self.path)}")
         self.observer.schedule(self.event_handler, self.path, recursive=self.recursive)
         self.observer.start()
 

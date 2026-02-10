@@ -7,10 +7,12 @@ from rich.table import Table
 
 console = Console()
 
-def run_benchmark():
-    questions_path = os.path.join("eval", "questions.json")
+def run_benchmark(questions_path: str = None):
+    if not questions_path:
+        questions_path = os.path.join("eval", "questions.json")
+        
     if not os.path.exists(questions_path):
-        console.print("[red]❌ Test pitanja nisu pronađena na eval/questions.json[/]")
+        console.print(f"[red]❌ Test pitanja nisu pronađena na {questions_path}[/]")
         return
 
     with open(questions_path, "r", encoding="utf-8") as f:

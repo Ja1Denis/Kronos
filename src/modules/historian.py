@@ -14,7 +14,7 @@ class Historian:
         """
         Analizira novi sadržaj i traži kontradikcije s postojećim znanjem.
         """
-        print(f"{Fore.CYAN}📜 Historian analizira konzistentnost...{Style.RESET_ALL}")
+        print(f"📜 Historian analizira konzistentnost za project={project}...")
 
         # 1. Pronađi relevantno postojeće znanje
         # Tražimo odluke i činjenice koje su semantički slične
@@ -64,26 +64,31 @@ ODGOVOR (JSON format):
 Vrati SAMO JSON.
 """
 
-        # 3. Pozovi LLM
+        # 3. Pozovi LLM (korištenje stabilnog modela)
         response = self.llm.complete(prompt, model_name="gemini-2.0-flash")
         
         # 4. Parsiraj odgovor
         try:
-            clean_resp = response.replace("```json", "").replace("```", "").strip()
+            # Thinking modeli često vraćaju puno teksta prije/poslije JSON-a
+            clean_resp = response.strip()
+            
+            # Traži prvi '{' i zadnji '}'
             start = clean_resp.find('{')
             end = clean_resp.rfind('}')
+            
             if start != -1 and end != -1:
-                clean_resp = clean_resp[start:end+1]
-                
-            analysis = json.loads(clean_resp)
-            return analysis
+                json_str = clean_resp[start:end+1]
+                analysis = json.loads(json_str)
+                return analysis
+            else:
+                raise ValueError("Nije pronađen validan JSON blok u odgovoru.")
             
         except Exception as e:
-            print(f"{Fore.RED}Greška pri parsiranju Historian analize: {e}{Style.RESET_ALL}")
+            print(f"❌ Greška pri parsiranju Historian analize: {e}")
+            print(f"📄 Raw response preview: {response[:200]}...")
             return {
                 "contradiction_found": False,
-                "error": str(e),
-                "raw_response": response
+                "error": str(e)
             }
 
     def visualize_timeline(self, decision_id: int):

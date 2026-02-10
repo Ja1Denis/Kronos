@@ -12,6 +12,7 @@ from rich import print as rprint
 from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
+from src.modules.job_manager import JobManager
 from src.utils.llm_client import LLMClient
 
 # Tema boja (Cyberpunk vibe)
@@ -381,6 +382,11 @@ def stats():
     db_size = stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)
     table.add_row("Veličina Baze", f"{db_size/1024:.2f} MB")
     
+    # Job Queue Summary
+    job_stats = JobManager().get_job_stats()
+    job_summary = f"Total: {job_stats['total']} | OK: {job_stats['success_rate']} | Lat: {job_stats['avg_latency_sec']}"
+    table.add_row("Job Queue", job_summary)
+    
     console.print(table)
     
 @app.command()
@@ -486,12 +492,14 @@ def history(
             console.print("      [bold magenta]▼[/]")
 
 @app.command()
-def benchmark():
+def evaluate(
+    path: Optional[str] = typer.Option(None, "--path", "-p", help="Putanja do JSON datoteke s pitanjima")
+):
     """
-    Pokreće benchmark testove i generira report o performansama.
+    Pokreće benchmark testove (regresijsko testiranje) i generira report.
     """
     from src.benchmark import run_benchmark
-    run_benchmark()
+    run_benchmark(questions_path=path)
 
 @app.command()
 def audit(
@@ -748,6 +756,57 @@ def wipe():
         console.print("[bold green]Memorija je uspješno resetirana.[/]")
     else:
         console.print("[info]Otkazano.[/]")
+
+@app.command()
+def jobs(
+    limit: int = typer.Option(10, "--limit", "-n", help="Broj nedavnih poslova za prikaz"),
+    metrics: bool = typer.Option(True, "--metrics/--no-metrics", help="Prikaži metrike uspješnosti")
+):
+    """
+    Prikazuje status reda poslova (Job Queue) i metrike performansi.
+    """
+    manager = JobManager()
+    
+    if metrics:
+        stats_data = manager.get_job_stats()
+        console.print(Panel(
+            f"[bold cyan]📊 Job Queue Metrike[/]\n\n"
+            f"Ukupno poslova: [white]{stats_data['total']}[/]\n"
+            f"Success Rate:   [green]{stats_data['success_rate']}[/]\n"
+            f"Prosječna Latencija: [yellow]{stats_data['avg_latency_sec']}[/]",
+            border_style="cyan"
+        ))
+
+    job_list = manager.list_jobs(limit=limit)
+    if not job_list:
+        console.print("[warning]Nema poslova u bazi.[/]")
+        return
+
+    table = Table(title="🕒 Nedavni Poslovi", border_style="accent")
+    table.add_column("ID", style="dim", width=8)
+    table.add_column("Tip", style="bold cyan")
+    table.add_column("Status", style="white")
+    table.add_column("Napredak", justify="right")
+    table.add_column("Kreirano", style="dim")
+    
+    for job in job_list:
+        status_color = "green" if job['status'] == "completed" else ("red" if job['status'] == "failed" else "yellow")
+        
+        # Formatiranje datuma (ISO -> čitljivo)
+        try:
+            created = job['created_at'].split('T')[1][:5] if 'T' in job['created_at'] else job['created_at'][-8:-3]
+        except:
+            created = job['created_at']
+
+        table.add_row(
+            job['id'][:8],
+            job['type'],
+            f"[{status_color}]{job['status']}[/]",
+            f"{job['progress']}%",
+            created
+        )
+        
+    console.print(table)
 
 if __name__ == "__main__":
     app()

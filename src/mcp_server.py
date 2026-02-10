@@ -24,6 +24,15 @@ from mcp.server.fastmcp import FastMCP
 # Lazy load Kronos modula (izbjegavamo circular import)
 _oracle = None
 _librarian = None
+_job_manager = None
+
+def get_job_manager():
+    """Dohvaća JobManager instancu."""
+    global _job_manager
+    if _job_manager is None:
+        from src.modules.job_manager import JobManager
+        _job_manager = JobManager(os.path.join(ROOT_DIR, "data", "jobs.db"))
+    return _job_manager
 
 def get_oracle():
     """Dohvaća Oracle instancu (lazy loading)."""
@@ -117,6 +126,21 @@ def kronos_stats() -> str:
                 emoji = {"problem": "🛑", "solution": "✅", "decision": "⚖️", "task": "📋", "code": "💻"}.get(etype, "📝")
                 output.append(f"| {emoji} {etype.capitalize()} | {count:,} |")
         
+        # Job Queue Stats
+        try:
+            jm = get_job_manager()
+            jstats = jm.get_job_stats()
+            output.append(f"\n### 🕒 Job Queue")
+            output.append(f"| Status | Broj |")
+            output.append(f"|--------|------|")
+            for status, count in jstats.get('counts', {}).items():
+                output.append(f"| {status.capitalize()} | {count} |")
+            output.append(f"\n- **Ukupno poslova:** {jstats['total']}")
+            output.append(f"- **Success Rate:** {jstats['success_rate']}")
+            output.append(f"- **Prosječna latencija:** {jstats['avg_latency_sec']}")
+        except Exception as e:
+            output.append(f"\n*Greška pri dohvaćanju Job Queue stats: {e}*")
+            
         return "\n".join(output)
         
     except Exception as e:
@@ -189,6 +213,94 @@ def kronos_ingest(path: str, recursive: bool = True) -> str:
         
     except Exception as e:
         return f"Greška pri indeksiranju: {str(e)}"
+
+
+@mcp.tool()
+def kronos_submit_job(job_type: str, params: dict, priority: int = 5) -> str:
+    """
+    Pošalji novi asinkroni zadatak u Kronos red čekanja (Job Queue).
+    Korisno za dugotrajne operacije poput 'ingest' ili 'rebuild'.
+    
+    Args:
+        job_type: Tip zadatka (npr. 'ingest', 'ingest_batch', 'test_job')
+        params: Parametri zadatka (npr. {"path": ".", "recursive": True})
+        priority: Prioritet od 1 do 10 (default: 5)
+        
+    Returns:
+        ID kreiranog posla koji se može pratiti.
+    """
+    try:
+        jm = get_job_manager()
+        job_id = jm.submit_job(job_type, params, priority)
+        return f"🚀 Posao `{job_type}` uspješno poslan. ID: `{job_id}`. Koristi `kronos_job_status` za praćenje."
+    except Exception as e:
+        return f"Greška pri slanju posla: {str(e)}"
+
+
+@mcp.tool()
+def kronos_job_status(job_id: str) -> str:
+    """
+    Provjeri status i napredak određenog zadatka.
+    
+    Args:
+        job_id: Jedinstveni ID posla dobiven pri slanju.
+        
+    Returns:
+        Informacije o statusu, napretku, rezultatu ili grešci.
+    """
+    try:
+        jm = get_job_manager()
+        job = jm.get_job(job_id)
+        
+        if not job:
+            return f"Posao s ID-om `{job_id}` nije pronađen."
+            
+        output = [f"### 📋 Status Posla: `{job_id}`"]
+        output.append(f"- **Tip:** `{job['type']}`")
+        output.append(f"- **Status:** `{job['status']}`")
+        output.append(f"- **Napredak:** `{job['progress']}%`")
+        output.append(f"- **Kreirano:** `{job['created_at']}`")
+        
+        if job.get('result'):
+            output.append(f"\n**Rezultat:**\n```json\n{job['result']}\n```")
+        if job.get('error'):
+            output.append(f"\n**Greška:**\n```\n{job['error']}\n```")
+            
+        return "\n".join(output)
+    except Exception as e:
+        return f"Greška pri provjeri statusa: {str(e)}"
+
+
+@mcp.tool()
+def kronos_list_jobs(limit: int = 10) -> str:
+    """
+    Prikaži listu nedavnih zadataka iz reda čekanja.
+    
+    Args:
+        limit: Broj zadataka za prikaz (default: 10)
+        
+    Returns:
+        Tablica s nedavnim poslovima.
+    """
+    try:
+        jm = get_job_manager()
+        jobs = jm.list_jobs(limit=limit)
+        
+        if not jobs:
+            return "Nema evidentiranih poslova."
+            
+        output = ["## 🕒 Nedavni Poslovi\n"]
+        output.append("| ID | Tip | Status | Napredak | Kreirano |")
+        output.append("|----|-----|--------|----------|----------|")
+        
+        for job in jobs:
+            short_id = job['id'][:8]
+            created = job['created_at'].split('T')[1][:5] if 'T' in job['created_at'] else job['created_at'][-8:-3]
+            output.append(f"| `{short_id}` | `{job['type']}` | `{job['status']}` | `{job['progress']}%` | {created} |")
+            
+        return "\n".join(output)
+    except Exception as e:
+        return f"Greška pri listanju poslova: {str(e)}"
 
 
 def main():

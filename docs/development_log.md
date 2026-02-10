@@ -1,9 +1,38 @@
 # Development Log - Kronos
 
+### [2026-02-10] Faza 8 - Sprint 2: Intelligence & Evaluation (COMPLETED)
+- **Cilj:** Optimizacija Watcher-a i uvođenje metrika kvalitete.
+- **Status:** ✅ Completed
+- **Ključne promjene:**
+    - **Watcher Batching (T040.2):** Smanjen pritisak na bazu kroz grupiranje datoteka (`ingest_batch`) s debounce-om od 5s.
+    - **Jobs CLI & Metrics (T047):** Praćenje `success_rate` i latencije kroz novu naredbu `kronos jobs`.
+    - **Evaluate CLI (T048):** Integriran Benchmark sustav izravno u glavne komande (`kronos evaluate`).
+
+### [2026-02-10] Faza 8 - Sprint 1: Job Queue & Persistence (COMPLETED)
+- **Cilj:** Implementacija asinkronog sustava za upravljanje zadacima i priprema za autonomiju.
+- **Status:** ✅ Completed
+- **Ključne promjene:**
+    - **Single-Process Job Queue (T038):**
+        - Implementiran `JobManager` s SQLite backendom (`data/jobs.db`).
+        - Podržava prioritete, status (`pending`, `running`, `completed`, `failed`) i `json` parametre.
+        - Potpuna perzistencija - queue preživljava restart servera.
+    - **Async API (T039):**
+        - Dodani endpointi: `POST /jobs`, `GET /jobs/{id}`, `DELETE /jobs/{id}`.
+        - Omogućuje klijentima (npr. VS Code ekstenzija) da šalju dugotrajne zadatke bez blokiranja.
+    - **Worker Thread (T040):**
+        - Implementiran pozadinski `Worker` (Daemon Thread).
+        - Vrti se u petlji unutar serverskog procesa (dijeli memoriju s Oracle-om).
+        - Graceful Shutdown: Na `Ctrl+C` ili stop signal, worker završava trenutni korak i gasi se čisto.
+        - Podržava `ingest` jobove (asinkrona indeksacija).
+
 ### [2026-02-10] Faza 7: Stabilizacija (Context Budgeter) - COMPLETED
 - **Cilj:** Optimizacija konteksta, smanjenje latencije i eliminacija DB grešaka.
 - **Status:** ✅ Completed
 - **Ključne promjene:**
+    - [2026-02-10] **Faza 8 Završena**: Kronos je postao asinkroni agent s proaktivnim mogućnostima. Implementiran Job Queue, MCP, SSE notifikacije i inteligentna analiza kontradikcija. Stabilnost potvrđena kroz "The Inquisitor" stres test.
+    - [2026-02-10] **Sprint 3 (CPM)**: MCP alatnica (7 alata) verificirana.
+    - [2026-02-10] **Sprint 1 & 2**: Job Queue stabiliziran, batching Watcher funkcionalan.
+    - [2026-02-09] **Faza 7**: Migracija na FastAPI + Singleton Oracle. Riješeni concurrency problemi.
     - **Context Budgeter:** Implementiran algoritam za dinamičko upravljanje tokenima (Light/Normal/Extra profili).
     - **Singleton Oracle:** Riješen problem s paralelnim pristupom ChromaDB-u (global threading lock).
     - **The Three Corpses (T034):**

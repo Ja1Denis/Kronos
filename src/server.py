@@ -5,9 +5,11 @@ import os
 import sys
 import time
 
+from sse_starlette.sse import EventSourceResponse
 from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
+from src.modules.notification_manager import notification_manager
 
 app = FastAPI(title="Kronos API", description="Semantička Memorija za AI Agente", version="0.2.0")
 
@@ -33,6 +35,11 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+@app.get("/stream")
+async def stream_notifications():
+    """SSE endpoint za real-time notifikacije."""
+    return EventSourceResponse(notification_manager.subscribe())
 
 @app.post("/ingest")
 def ingest_data(request: IngestRequest):
@@ -421,26 +428,105 @@ def supersede_decision(request: SupersedeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== JOB QUEUE API ====================
+
+from src.modules.job_manager import JobManager
+
+class JobSubmitRequest(BaseModel):
+    type: str
+    params: Dict[str, Any]
+    priority: Optional[int] = 5
+
+@app.post("/jobs")
+def submit_job(request: JobSubmitRequest):
+    """
+    Kreira novi asinkroni posao (npr. 'ingest', 'prune').
+    """
+    try:
+        manager = JobManager()
+        job_id = manager.submit_job(request.type, request.params, request.priority)
+        return {"id": job_id, "status": "pending"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/jobs/{job_id}")
+def get_job_status(job_id: str):
+    """
+    Provjerava status posla.
+    """
+    try:
+        manager = JobManager()
+        job = manager.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/jobs/{job_id}")
+def cancel_job(job_id: str):
+    """
+    Otkazuje posao ako je još u 'pending' ili 'running' stanju.
+    """
+    try:
+        manager = JobManager()
+        success = manager.cancel_job(job_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Job not found or cannot be cancelled")
+        return {"status": "cancelled"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+from src.modules.worker import Worker
+
+# Global Worker Instance
+_worker_instance = None
+
 @app.on_event("startup")
 def startup_event():
-    """Pokreće watcher u pozadini pri startu servera."""
+    """Pokreće pozadinske servise (Watcher, Worker)."""
+    global _worker_instance
     import threading
     from src.modules.watcher import Watcher
     
-    # Warmup Singleton Oracle
+    # 1. Warmup Singleton Oracle
     try:
         get_oracle()
     except Exception as e:
         print(f"❌ Failed to init Oracle: {e}")
     
+    # 2. Start Watcher (Daemon Thread)
     def run_watcher():
         watcher = Watcher(path=".") # Prati cijeli projektni root
         watcher.run()
         
-    thread = threading.Thread(target=run_watcher, daemon=True)
-    thread.start()
-    print("🚀 Background Watcher pokrenut na 'docs' folderu.")
+    watcher_thread = threading.Thread(target=run_watcher, daemon=True, name="KronosWatcher")
+    watcher_thread.start()
+    print("🚀 Background Watcher pokrenut na '.' folderu.")
+
+    # 3. Start Job Worker (Daemon Thread)
+    # Worker runs in its own thread loop and handles jobs from SQLite queue
+    try:
+        _worker_instance = Worker(poll_interval=2.0)
+        _worker_instance.start()
+        print("🚀 Background Job Worker pokrenut.")
+    except Exception as e:
+        print(f"❌ Failed to start Worker: {e}")
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Graceful shutdown za servise."""
+    global _worker_instance
+    if _worker_instance:
+        print("🛑 Zaustavljam Worker...")
+        _worker_instance.stop()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # Workers=1 to avoid multiple instances of Singletons (Oracle, JobManager)
+    uvicorn.run(app, host="127.0.0.1", port=8000, workers=1)

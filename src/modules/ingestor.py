@@ -18,7 +18,7 @@ class Ingestor:
 
     def run(self, path, project_name=None, recursive=False, silent=False):
         """
-        Glavna metoda za pokretanje ingestije.
+        Glavna metoda za pokretanje ingestije na cijeloj putanji (folder ili file).
         """
         # Detektiraj ime projekta ako nije zadan
         if not project_name:
@@ -31,17 +31,26 @@ class Ingestor:
             logger.info(f"Pokrećem Ingestora na projektu [bold cyan]{project_name}[/] (putanja: {path})")
         
         files = self._scan_files(path, recursive)
-        
+        self.run_batch(files, project_name=project_name, silent=silent)
+
+    def run_batch(self, files, project_name="default", silent=False):
+        """
+        Obrađuje listu datoteka.
+        """
+        if not files:
+            return
+
         if not silent:
-            logger.info(f"Pronađeno {len(files)} datoteka.")
+            logger.info(f"Ingestor obrađuje batch od {len(files)} datoteka.")
 
         processed_count = 0
         for file_path in files:
-            self._process_file(file_path, project=project_name, silent=silent)
-            processed_count += 1
+            if os.path.exists(file_path):
+                self._process_file(file_path, project=project_name, silent=silent)
+                processed_count += 1
             
         if not silent:
-            logger.success(f"Završeno! Projekt [bold cyan]{project_name}[/] je spreman. Obrađeno {processed_count} datoteka.")
+            logger.success(f"Batch završen. Obrađeno {processed_count} datoteka.")
 
     def _scan_files(self, path, recursive):
         """
