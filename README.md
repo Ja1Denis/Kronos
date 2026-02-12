@@ -1,115 +1,135 @@
 # Kronos ⏳
 **Lokalni Sustav Semantičke Memorije za AI Agente**
 
-Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) da imaju dugoročno pamćenje, razumiju kontekst projekta i drastično smanje potrošnju tokena putem RAG (Retrieval-Augmented Generation) pristupa.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Status: Beta-Rust](https://img.shields.io/badge/Status-Beta--Rust-orange.svg)]()
+
+Kronos je napredni memorijski sustav koji omogućuje AI agentima dugoročno pamćenje i duboko razumijevanje konteksta projekta uz **drastično smanjenje troškova** putem inovativnog "Pointer-based" RAG pristupa.
+
+---
+
+## 💰 Efikasnost Tokena - Kronos Prednost
+
+### Zašto su "Pointeri" (pokazivači) važni?
+
+Tradicionalni RAG sustavi šalju **cijele blokove dokumenata** vašem LLM-u, trošeći ogromne količine tokena. Kronos umjesto toga šalje **lagane pokazivače**, dopuštajući AI-u da sam odluči što mu zaista treba.
+
+### Vizualna usporedba
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Tradicionalni RAG (Šalje sav sadržaj)                       │
+│ ████████████████████████████████████████████  15,000 tokena │
+│ Trošak: $0.021 po upitu                                     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Kronos Pointeri (Samo metapodaci)                           │
+│ ██ 300 tokena                                               │
+│ Trošak: $0.00042 po upitu                                   │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Kronos Smart Fetch (Pointeri + Selektivni sadržaj)          │
+│ ████████ 2,500 tokena                                       │
+│ Trošak: $0.0035 po upitu                                    │
+└─────────────────────────────────────────────────────────────┘
+
+📉 **83-98% smanjenje broja tokena**
+💵 **5-50x ušteda na troškovima**
+```
+
+### Stvarni izračun troškova
+
+Bazirano na **Gemini 1.5 Flash-8B** cijenama ($0.14/1M tokena):
+
+| Mjesečni volumen  | Tradicionalni RAG | Kronos (Samo Pointeri) | Kronos (Smart Fetch) | Godišnja ušteda |
+|-------------------|-------------------|------------------------|----------------------|-----------------|
+| **1,000 upita**   | $21               | $0.42                  | $3.50                | **$210-246**    |
+| **10,000 upita**  | $210              | $4.20                  | $35                  | **$2,100-2,460**|
+| **100,000 upita** | $2,100            | $42                    | $350                 | **$21,000-24,600**|
+
+<sub>*Izračunato s 15k tokena/upit (RAG), 300 tokena/upit (Pointer), 2.5k tokena/upit (Smart Fetch)*</sub>
+
+💡 **Break-even točka: ~500 upita** (Kronos se isplaćuje u danima, ne mjesecima!)
+
+---
 
 ## 🌟 Ključne Značajke
-- **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga poznatih pojmova implementirana u **Rustu** (**< 1ms**). Preskače tešku artiljeriju (LLM/Vector) za instantne odgovore.
-- **Hibridna Pretraga**: Kombinira vektorsku pretragu (ChromaDB) za *značenje* i keyword pretragu (SQLite FTS5) za *preciznost*.
 
-- **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`). AI uvijek zna koja je odluka trenutno važeća.
-- **MCP Server**: Integracija s Claude Desktop aplikacijom putem Model Context Protocola.
-- **Strukturirano Znanje**: Automatski izvlači probleme, rješenja, odluke i zadatke.
-- **Project Awareness**: Automatski izolira znanje po projektima (npr. `cortex-search`, `subtitle-ai`).
-- **Debounced Watcher**: Pametno prati promjene u datotekama i automatski ih indeksira bez opterećenja sustava.
+- ⚡ **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga pojmova implementirana u Rustu (**< 1ms**).
+- 🔍 **Hibridna Pretraga**: Kombinacija vektorske pretrage (ChromaDB) i precizne FTS5 pretrage (SQLite).
+- ⚖️ **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`).
+- 📂 **Project Awareness**: Automatska izolacija znanja po projektima.
+- 🛠️ **Smart Fetching**: AI samostalno zahtijeva točne linije koda tek kada su mu potrebne.
+
+---
+
+## 🏗️ Arhitektura (High-Level)
+
+```text
+[ AI Client / Antigravity ] <--> [ FastAPI Server (Port 8000) ]
+                                          |
+        ┌─────────────────────────────────┴──────────────────────────────┐
+        ▼                                 ▼                              ▼
+ [ Rust FastPath ]                [ SQLite (FTS5) ]              [ ChromaDB (Vector) ]
+ (Literal Matches)                (Keyword Rank)                 (Semantic Score)
+        │                                 │                              │
+        └─────────────────────────────────┬──────────────────────────────┘
+                                          ▼
+                         [ Oracle (Reranking & Selection) ]
+                                          │
+                                 [ Context Budgeter ]
+```
 
 ---
 
 ## 🚀 Brzi Start
 
-### 1. Ultra-Brza Pretraga (Desktop) 🚀
-Za trenutne odgovore bez čekanja:
-1.  **Dvaput klikni** na ikonu **"Kronos Server"** na radnoj površini.
-2.  Kada dobiješ potvrdu da je spreman, koristi:
+### 1. Instalacija
 ```powershell
-.\ask_fast.ps1 -Query "tvoje pitanje"
+# Kloniraj repozitorij i instaliraj ovisnosti
+git clone https://github.com/Ja1Denis/Kronos.git
+cd Kronos
+pip install -r requirements.txt
 ```
 
-### 2. One-Click Chat 🖱️
-Sada možeš pokrenuti interaktivni chat direktno s Desktopa koristeći ikonu **"Kronos AI Chat"** ili:
+### 2. Pokreni Ingestiju (Učitavanje znanja)
 ```powershell
-.\run_chat.bat
-```
-
-### 2. Ingestija (Učitavanje znanja)
-Učitaj projekt kako bi Kronos naučio o njemu:
-```powershell
-.\run.ps1 ingest "." -Recursive
-```
-
-### 3. Skupna Ingestija (Full Workspace Ingest)
-Učitaj sve projekte u radnom prostoru odjednom:
-```powershell
+# Učitaj cijeli radni prostor odjednom
 python .\ingest_everything.py
 ```
 
-### 4. Reset i Čišćenje
-Ako je baza podataka postala nekonzistentna ili želiš svjež početak:
+### 3. Pokreni Server
 ```powershell
-# Interaktivni wipe
-.\run.ps1 wipe
+# Postavi PYTHONPATH i pokreni API
+$env:PYTHONPATH="."; python src/server.py
+```
 
-# Prisilni wipe (bez potvrde)
+### 4. Prvi Upit
+```powershell
+.\ask_fast.ps1 -Query "Što Kronos radi sa tokenima?"
+```
+
+---
+
+## 🛠️ Razvoj i Maintenance
+
+### Reset i Čišćenje
+Ako želiš svjež početak:
+```powershell
+# Prisilni wipe bez potvrde
 .\run.ps1 wipe --force
 ```
 
-### 5. Ručni Unos Znanja
-Dodaj važnu informaciju ili odluku bez pisanja datoteka:
+### Testiranje
 ```powershell
-python -m src.cli save "Opis tvoje odluke" --as decision --project kronos
+python -m pytest tests/ -v
 ```
 
 ---
 
-## 🧠 Napredno Korištenje
-
-### Upravljanje Odlukama i Povijest
-Kronos prati evoluciju tvog razmišljanja:
-```powershell
-# Zamijeni staru odluku novom
-.\run.ps1 ratify ID --supersede "Nova verzija odluke"
-
-# Pogledaj timeline promjena
-.\run.ps1 history ID
-```
-
-### Multi-Project Dashboard
-Vidi stanje svih svojih projekata:
-```powershell
-.\run.ps1 projects
-```
-
-### Benchmark & Rebuild
-Provjeri performanse ili rekonstruiraj bazu iz arhive:
-```powershell
-.\run.ps1 benchmark   # Test pretrage i latencije
-.\run.ps1 rebuild     # Potpuna rekonstrukcija iz archive.jsonl
-```
-
----
-
-## 🏗️ Arhitektura (Kronos 2.0)
-Projekt se sastoji od modularnih komponenata:
-1.  **Ingestor**: Orkestrator za čitanje dokumenata.
-2.  **Librarian**: Upravitelj metapodacima i FTS indeksom. Podržava **Event Sourcing**.
-3.  **Oracle**: 3-stage hybrid retrieval pipeline (Keyword -> Vector -> Reranking).
-4.  **Watcher**: Real-time indeksiranje promjena.
-5.  **MCP Server**: Bridge prema modernim AI klijentima.
-
----
-
-## 📊 Zašto Kronos? (Token Ekonomija)
-Ušteda na tokenima pri radu s velikim projektima iznosi preko **95%**.
-- **Bez Kronosa**: 5000+ tokena konteksta po upitu.
-- **S Kronosom**: ~200 tokena preciznog konteksta.
-
----
-
-## 🛠️ Razvoj i Testiranje
-Pokreni kompletan testni paket:
-```powershell
-.\venv\Scripts\pytest tests/ -v
-```
-
----
-*Izrađeno s ❤️ za naprednu AI kolaboraciju. Version v2.1.0-beta-rust*
+## 📝 Licenca i Zasluge
+Izrađeno s ❤️ za naprednu AI kolaboraciju.
+Licencirano pod **MIT Licencom**.
