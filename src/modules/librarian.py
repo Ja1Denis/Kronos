@@ -4,14 +4,25 @@ import json
 import hashlib
 from datetime import datetime
 from colorama import Fore, Style
+from src.utils.logger import logger
 import chromadb
+from src.utils.metadata_helper import validate_metadata, enrich_metadata
 
 class Librarian:
     def __init__(self, data_path="data"):
-        self.data_path = data_path
-        self.store_path = os.path.join(data_path, "store")  # ChromaDB
-        self.meta_path = os.path.join(data_path, "metadata.db") # SQLite
-        self.archive_path = os.path.join(data_path, "archive.jsonl") # JSONL
+        # Ako je proslijeđen default "data", pokušaj ga naći relativno u odnosu na projekt
+        if data_path == "data":
+            # Librarian je u src/modules/librarian.py
+            curr_dir = os.path.dirname(os.path.abspath(__file__)) # src/modules
+            src_dir = os.path.dirname(curr_dir) # src
+            root_dir = os.path.dirname(src_dir) # kronos
+            self.data_path = os.path.join(root_dir, "data")
+        else:
+            self.data_path = data_path
+            
+        self.store_path = os.path.join(self.data_path, "store")  # ChromaDB
+        self.meta_path = os.path.join(self.data_path, "metadata.db") # SQLite
+        self.archive_path = os.path.join(self.data_path, "archive.jsonl") # JSONL
 
         # Inicijalizacija
         self._init_sqlite()
@@ -31,15 +42,23 @@ class Librarian:
             meta = {
                 "source": source or "manual",
                 "project": project or "default",
-                "type": "entity", # Marker za filtriranje
+                "type": "entity",
                 "entity_type": etype,
                 "entity_id": eid,
                 "created_at": datetime.now().isoformat()
             }
+            
+            if not validate_metadata(meta):
+                print(f"{Fore.RED}❌ Metadata Validation Failed for entity_{eid}. Skipping.{Style.RESET_ALL}")
+                return
+                
+            # Enrich metadata
+            final_meta = enrich_metadata(content, meta)
+            
             collection.upsert(
                 ids=[f"entity_{eid}"],
                 documents=[content],
-                metadatas=[meta]
+                metadatas=[final_meta]
             )
         except Exception as e:
             print(f"{Fore.RED}Greška pri indeksiranju entiteta #{eid}: {e}{Style.RESET_ALL}")
@@ -73,12 +92,22 @@ class Librarian:
         # 2. Virtualna tabela za Full-Text Search (FTS5)
         # Sadrži originalni tekst i stemiranu verziju za bolju pretragu
         try:
+            # Provjera postoje li stupci start_line/end_line
+            cursor.execute("PRAGMA table_info(knowledge_fts)")
+            cols = [c[1] for c in cursor.fetchall()]
+            
+            if cols and "start_line" not in cols:
+                logger.info("⚡ Migracija: Nadogradnja FTS tablice (start_line, end_line)...")
+                cursor.execute("DROP TABLE knowledge_fts")
+            
             cursor.execute('''
                 CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(
                     path,           -- Putanja do datoteke
                     project,        -- Ime projekta
                     content,        -- Originalni sadržaj chunka
-                    stemmed_content -- Stemirani sadržaj (za keyword search)
+                    stemmed_content, -- Stemirani sadržaj (za keyword search)
+                    start_line UNINDEXED,
+                    end_line UNINDEXED
                 )
             ''')
         except sqlite3.OperationalError:
@@ -156,56 +185,90 @@ class Librarian:
             for r in results
         ]
 
-    def search_fts(self, query_stemmed, project=None, limit=5):
+    def _escape_fts_token(self, token: str) -> str:
         """
-        Izvodi keyword search koristeći FTS5 na stemiranom sadržaju.
-        Vraća listu (path, content, rank).
+        Escapes special characters for FTS5 queries to prevent syntax errors.
+        """
+        if not token: return ""
+        # Remove quotes
+        token = token.replace('"', '')
+        # Handle trailing minus or stand-alone minus (not allowed as suffix)
+        if token.endswith('-') or token == '-':
+            token = token.replace('-', '')
+        
+        # If it contains special characters, wrap it in double quotes for FTS
+        # FTS5 characters: + * : ^ " ( )
+        special = set('+*:^"()')
+        if any(c in special for c in token) or '-' in token:
+            return f'"{token}"'
+        return token
+
+    def search_fts(self, query_stemmed, project=None, limit=5, mode="and"):
+        """
+        Hybrid FTS search.
+        modes:
+          - "phrase": exact sequence match (old behavior)
+          - "and": all tokens must be present in any order (default)
+          - "or": any token can be present
         """
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         
+        tokens = [self._escape_fts_token(t) for t in query_stemmed.split() if t.strip()]
+        if not tokens:
+            conn.close()
+            return []
+
+        if mode == "phrase":
+            fts_logic = f'"{query_stemmed}"'
+        elif mode == "or":
+            fts_logic = ' OR '.join(tokens)
+        else: # "and" is default
+            fts_logic = ' AND '.join(tokens)
+
         try:
             if project:
-                # FTS5 strukturirani upit: project:"ime" AND stemmed_content:"upit"
-                # Osiguravamo se da tražimo po projektu I sadržaju
-                fts_query = f'project:"{project}" AND stemmed_content:"{query_stemmed}"'
-                
-                cursor.execute('''
-                    SELECT path, content 
-                    FROM knowledge_fts 
-                    WHERE knowledge_fts MATCH ? 
-                    ORDER BY rank 
-                    LIMIT ?
-                ''', (fts_query, limit))
+                fts_query = f'project:"{project}" AND stemmed_content:({fts_logic})'
             else:
-                # Traži samo po stemiranom sadržaju
-                fts_query = f'stemmed_content:"{query_stemmed}"'
-                cursor.execute('''
-                    SELECT path, content 
-                    FROM knowledge_fts 
-                    WHERE knowledge_fts MATCH ? 
-                    ORDER BY rank 
-                    LIMIT ?
-                ''', (fts_query, limit))
+                fts_query = f'stemmed_content:({fts_logic})'
+            
+            # DEBUG
+            from src.utils.logger import logger
+            logger.info(f"[LIBRARIAN DEBUG] FTS Query: {fts_query}")
+
+            cursor.execute('''
+                SELECT path, content, start_line, end_line 
+                FROM knowledge_fts 
+                WHERE knowledge_fts MATCH ? 
+                ORDER BY rank 
+                LIMIT ?
+            ''', (fts_query, limit))
                 
             results = cursor.fetchall()
+            logger.info(f"[LIBRARIAN DEBUG] Results: {len(results)}")
+            
+            # Fallsafe: If AND returns 0 and we aren't in OR mode, try OR fallback
+            if not results and mode == "and":
+                conn.close()
+                return self.search_fts(query_stemmed, project=project, limit=limit, mode="or")
+
         except Exception as e:
-            print(f"{Fore.RED}Greška pri FTS pretrazi: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}Greška pri FTS pretrazi [mode={mode}]: {e}{Style.RESET_ALL}")
             results = []
             
         conn.close()
         return results
 
-    def store_fts(self, path, content, stemmed_content, project=None):
+    def store_fts(self, path, content, stemmed_content, project=None, start_line=1, end_line=1):
         """Sprema chunk u FTS indeks."""
         conn = sqlite3.connect(self.meta_path)
         cursor = conn.cursor()
         
         try:
             cursor.execute('''
-                INSERT INTO knowledge_fts (path, content, stemmed_content, project)
-                VALUES (?, ?, ?, ?)
-            ''', (path, content, stemmed_content, project))
+                INSERT INTO knowledge_fts (path, content, stemmed_content, project, start_line, end_line)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (path, content, stemmed_content, project, start_line, end_line))
             conn.commit()
         except Exception as e:
             print(f"{Fore.RED}Greška pri FTS insertu: {e}{Style.RESET_ALL}")

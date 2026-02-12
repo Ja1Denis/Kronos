@@ -11,7 +11,7 @@ class BudgetConfig:
     global_limit: int = 4000
     briefing_limit: int = 300
     entities_limit: int = 800
-    chunks_limit: int = 2600
+    chunks_limit: int = 3200
     recent_changes_limit: int = 250
     
     # File Caps
@@ -51,7 +51,7 @@ class BudgetConfig:
 @dataclass
 class ContextItem:
     content: str
-    kind: Literal["cursor", "entity", "chunk", "evidence", "briefing", "recent_changes"]
+    kind: Literal["cursor", "entity", "chunk", "evidence", "briefing", "recent_changes", "pointer"]
     source: str
     utility_score: float = 0.5
     token_cost: int = 0
@@ -59,13 +59,47 @@ class ContextItem:
 
     def __post_init__(self):
         if not self.token_cost:
-            # Simple estimation: 1 token ~= 4 chars
-            self.token_cost = max(1, len(self.content) // 4)
+            self.token_cost = self.estimate_tokens(self.content)
+        self._generate_dedup_key()
+    @staticmethod
+    def estimate_tokens(text: str) -> int:
+        """
+        VAŽNO: Prevents budget overflow s robusnom procjenom.
+        """
+        # DEFENSE 1: Handle None/non-string
+        if text is None:
+            return 0
+        if not isinstance(text, str):
+            text = str(text)
+        
+        # DEFENSE 2: Handle empty string
+        if len(text.strip()) == 0:
+            return 0
+        
+        # Main estimation logic (rough estimate: chars / 4)
+        estimated = len(text) / 4
+        
+        # DEFENSE 3: Safety margin (20% overhead)
+        estimated *= 1.2
+        
+        # DEFENSE 4: Cap at maximum (prevent overflow/DoS)
+        MAX_TOKENS_PER_ITEM = 100000
+        if estimated > MAX_TOKENS_PER_ITEM:
+            logger.warning(f"Token estimate exceeds max: {estimated}")
+            estimated = MAX_TOKENS_PER_ITEM
+            
+        # DEFENSE 5: Floor at minimum for non-empty string
+        return max(1, int(estimated))
+
+    def _generate_dedup_key(self):
+        # Create hash of content (normalized) + source
+        # We normalize whitespace to catch near-duplicates
+        norm_content = " ".join(self.content.split())
+        self.dedup_key = hashlib.md5((norm_content + self.source).encode()).hexdigest()
+
+    def __post_init_checks__(self): # Not used but good to have logic
         if not self.dedup_key:
-            # Create hash of content (normalized) + source
-            # We normalize whitespace to catch near-duplicates
-            norm_content = " ".join(self.content.split())
-            self.dedup_key = hashlib.md5((norm_content + self.source).encode()).hexdigest()
+            self._generate_dedup_key()
 
     def render(self) -> str:
         """Returns the formatted string for the LLM."""
@@ -84,6 +118,9 @@ class ContextItem:
         elif self.kind == "briefing":
              return f"--- BRIEFING ---\n{self.content}\n"
 
+        elif self.kind == "pointer":
+            return f"--- POINTER ({self.source}) ---\n{self.content}"
+            
         else:
             return f"--- {self.kind.upper()} ({self.source}) ---\n{self.content}"
 
@@ -97,11 +134,13 @@ class ContextComposer:
         self.current_tokens = 0
         self.category_tokens: Dict[str, int] = {
             "cursor": 0, "entity": 0, "chunk": 0, 
-            "evidence": 0, "briefing": 0, "recent_changes": 0
+            "evidence": 0, "briefing": 0, "recent_changes": 0,
+            "pointer": 0
         }
         self.file_chunk_counts: Dict[str, int] = {}
         self.file_token_counts: Dict[str, int] = {}
         self.seen_keys: Set[str] = set()
+        self.audit_log: List[str] = []
 
     def add_item(self, item: ContextItem):
         self.items.append(item)
@@ -132,28 +171,34 @@ class ContextComposer:
         # Chunks: 0.5 - 0.8 (based on utility score)
         # Recent Diffs: 0.6
         
-        # Adjust utility scores based on kind logic if not already set correctly
+        # 1. Pre-processing
         for item in self.items:
             # Apply "Fat Chunk Rule" - hard trimming
             if item.kind == "chunk" and item.token_cost > self.config.chunk_hard_cap:
-                # Trim content
                 limit_chars = self.config.chunk_hard_cap * 4
                 item.content = item.content[:limit_chars] + "...[TRIMMED]"
                 item.token_cost = self.config.chunk_hard_cap
             
-            # Ensure base priorities if score is default
-            if item.kind == "cursor":
-                item.utility_score = 10.0 # Top priority
-            elif item.kind == "entity" and item.utility_score <= 0.5:
-                item.utility_score = 0.9 # Base priority for entities
-            elif item.kind == "recent_changes" and item.utility_score <= 0.5:
-                item.utility_score = 0.6
+            # Ensure base priorities
+            if item.kind == "cursor": item.utility_score = 10.0
+            elif item.kind == "briefing": item.utility_score = 9.0
+            elif item.kind == "entity" and item.utility_score <= 0.5: item.utility_score = 0.8
+            elif item.kind == "pointer": item.utility_score = 0.7 # High priority for pointers
+            elif item.kind == "recent_changes" and item.utility_score <= 0.5: item.utility_score = 0.6
         
-        # Sort by Utility Score Descending
-        sorted_items = sorted(self.items, key=lambda x: x.utility_score, reverse=True)
-
+        # Pass-based sorting:
+        # Pass 1: Mandatory/Small items (Cursor, Briefing, Entity, Pointer)
+        # Pass 2: Large items (Chunk, Evidence, Recent Changes)
+        pass1_kinds = ["cursor", "briefing", "entity", "pointer"]
+        pass1_items = [i for i in self.items if i.kind in pass1_kinds]
+        pass2_items = [i for i in self.items if i.kind not in pass1_kinds]
+        
+        # Sort both by utility
+        pass1_items.sort(key=lambda x: x.utility_score, reverse=True)
+        pass2_items.sort(key=lambda x: x.utility_score, reverse=True)
+        
         # 2. Greedy Fill
-        for item in sorted_items:
+        for item in pass1_items + pass2_items:
             # 2.1 check Deduplication
             if item.dedup_key in self.seen_keys:
                 self._log_rejection(item, "duplicate")
@@ -161,7 +206,13 @@ class ContextComposer:
 
             # 2.2 Global Budget Check
             if self.current_tokens + item.token_cost > self.config.global_limit:
-                self._log_rejection(item, "global_budget_exceeded")
+                # SPECIAL: If a CHUNK doesn't fit, can we try to add it as a POINTER?
+                if item.kind == "chunk":
+                     # Create a virtual pointer (simulated)
+                     # In a real scenario, Oracle provides the pointer, but here we can at least log it
+                     self._log_rejection(item, "global_budget_exceeded (Considered for downgrade)")
+                else:
+                     self._log_rejection(item, "global_budget_exceeded")
                 continue
 
             # 2.3 File Caps (only for chunks/evidence/recent)
@@ -169,12 +220,21 @@ class ContextComposer:
                 file_chunks = self.file_chunk_counts.get(item.source, 0)
                 file_tokens = self.file_token_counts.get(item.source, 0)
                 
-                if file_chunks >= self.config.file_max_chunks:
-                    self._log_rejection(item, f"file_chunk_cap ({self.config.file_max_chunks})")
+                # Dynamic File Cap: Allow more chunks for documentation and specs
+                current_file_max_chunks = self.config.file_max_chunks
+                current_file_max_tokens = self.config.file_max_tokens
+                
+                source_lower = item.source.lower()
+                if any(x in source_lower for x in ["docs", "specs", "requirements", "tasks.md"]):
+                    current_file_max_chunks = 10  # Deep memory for our own docs
+                    current_file_max_tokens = 3000 # Allow more tokens for docs
+                
+                if file_chunks >= current_file_max_chunks:
+                    self._log_rejection(item, f"file_chunk_cap ({current_file_max_chunks})")
                     continue
                 
-                if file_tokens + item.token_cost > self.config.file_max_tokens:
-                    self._log_rejection(item, f"file_token_cap ({self.config.file_max_tokens})")
+                if file_tokens + item.token_cost > current_file_max_tokens:
+                    self._log_rejection(item, f"file_token_cap ({current_file_max_tokens})")
                     continue
 
             # 2.4 Category Caps
@@ -195,8 +255,12 @@ class ContextComposer:
             # ACCEPT ITEM
             self.seen_keys.add(item.dedup_key)
             self.current_tokens += item.token_cost
-            self.category_tokens[item.kind] += item.token_cost
+            self.category_tokens[item.kind] = self.category_tokens.get(item.kind, 0) + item.token_cost
+            self.audit_log.append(f"ADD [{item.kind}] {item.source[:30]}: +{item.token_cost} tokens (total: {self.current_tokens})")
             
+            # POST-CHECK: Verify budget not exceeded (paranoid check)
+            assert self.current_tokens <= self.config.global_limit, f"BUG: Budget exceeded! {self.current_tokens} > {self.config.global_limit}"
+
             if item.kind in ["chunk", "evidence", "recent_changes"]:
                 self.file_chunk_counts[item.source] = self.file_chunk_counts.get(item.source, 0) + 1
                 self.file_token_counts[item.source] = self.file_token_counts.get(item.source, 0) + item.token_cost
@@ -205,7 +269,7 @@ class ContextComposer:
 
         # 3. Final Render (Sort by kind for structure: Briefing -> Entities -> Chunks)
         # Define render order
-        render_order = {"briefing": 0, "cursor": 1, "entity": 2, "recent_changes": 3, "chunk": 4, "evidence": 5}
+        render_order = {"briefing": 0, "cursor": 1, "entity": 2, "recent_changes": 3, "pointer": 4, "chunk": 5, "evidence": 6}
         
         final_context.sort(key=lambda x: render_order.get(x.kind, 99))
         

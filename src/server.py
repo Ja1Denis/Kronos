@@ -24,6 +24,13 @@ class QueryRequest(BaseModel):
     mode: Optional[str] = "budget" # auto, budget, debug
     stack_trace: Optional[str] = None
 
+class FetchExactRequest(BaseModel):
+    file_path: str
+    start_line: int
+    end_line: int
+    content_hash: Optional[str] = None
+    context_keys: Optional[List[str]] = None
+
 class IngestRequest(BaseModel):
     path: str
     recursive: Optional[bool] = False
@@ -108,11 +115,15 @@ def query_memory(request: QueryRequest):
         
         # 1. Retrieve candidates
         # Note: Oracle.ask returns dict {'entities': [...], 'chunks': [...]}
+        start_time = time.time()
         retrieval_results = oracle.ask(request.text, limit=current_limit, silent=True)
+        end_time = time.time()
+        total_latency = (end_time - start_time) * 1000 # ms
              
         
         # Audit Log (Server Side)
-        print(f"[{request.mode}] Query: '{request.text}' | Budget: {config.global_limit} | Cursor: {bool(request.cursor_context)} | File: {request.current_file_path}")
+        method = retrieval_results.get("method", "StandardHybrid")
+        print(f"[{request.mode}] Query: '{request.text}' | Latency: {total_latency:.2f}ms | Method: {method}")
         
         composer = ContextComposer(config)
         
@@ -228,18 +239,60 @@ def query_memory(request: QueryRequest):
         return {
             "query": request.text,
             "context": final_context,
+            "type": retrieval_results.get("type", "unknown"),
+            "pointers": retrieval_results.get("pointers", []),
+            "chunks": retrieval_results.get("chunks", []),
+            "message": retrieval_results.get("message", ""),
+            "total_found": retrieval_results.get("total_found", 0),
             "audit": audit_log,
             "parsed_trace": bool(request.stack_trace),
             "stats": {
                 "used_tokens": composer.current_tokens,
                 "global_limit": composer.config.global_limit,
-                "items_count": len(composer.items)
+                "items_count": len(composer.items),
+                "used_latency_ms": round(total_latency, 2),
+                "search_method": method
             }
         }
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fetch_exact")
+def fetch_exact(request: FetchExactRequest):
+    """
+    Kritično: Čita točan raspon linija iz datoteke uz sigurne provjere.
+    """
+    from src.utils.file_helper import read_file_safe, verify_content_hash
+    
+    # 1. Čitanje datoteke
+    result = read_file_safe(request.file_path, request.start_line, request.end_line)
+    
+    if "error" in result:
+        # Pretvori naše internal errore u FastAPI exceptions
+        status_code = 400
+        if result["error"] in ["permission_denied", "invalid_path"]: status_code = 403
+        if result["error"] == "file_not_found": status_code = 404
+        
+        raise HTTPException(status_code=status_code, detail=result["message"])
+    
+    content = result["content"]
+    warning = None
+    
+    # 2. Hash Verifikacija (Graceful Degradation)
+    if request.content_hash:
+        is_fresh, msg = verify_content_hash(content, request.content_hash)
+        if not is_fresh:
+            warning = "stale_pointer"
+            
+    return {
+        "content": content,
+        "file": request.file_path,
+        "range": [request.start_line, request.end_line],
+        "warning": warning,
+        "status": "success"
+    }
 
 @app.get("/stats")
 def get_stats():
@@ -526,7 +579,38 @@ def shutdown_event():
         print("🛑 Zaustavljam Worker...")
         _worker_instance.stop()
 
+def kill_port_8000():
+    """Kill any process using port 8000 (Windows) balance)."""
+    import subprocess
+    try:
+        # Pronađi PID na portu 8000
+        result = subprocess.run(
+            ['netstat', '-ano'],
+            capture_output=True,
+            text=True,
+            shell=True
+        )
+        
+        found = False
+        for line in result.stdout.split('\n'):
+            if ':8000' in line and 'LISTENING' in line:
+                # Extract PID (zadnji broj u liniji)
+                pid = line.strip().split()[-1]
+                print(f"🔫 Killing process {pid} on port 8000")
+                subprocess.run(['taskkill', '/F', '/PID', pid], 
+                             capture_output=True, shell=True)
+                found = True
+        
+        if found:
+            print("✅ Port 8000 cleared")
+            time.sleep(1) # Mali delay da OS oslobodi socket
+        
+    except Exception as e:
+        print(f"⚠️ Could not clear port: {e}")
+
 if __name__ == "__main__":
     import uvicorn
-    # Workers=1 to avoid multiple instances of Singletons (Oracle, JobManager)
+    # 1. Prvo oslobodi port ako je zauzet
+    kill_port_8000()
+    # 2. Pokreni server (Workers=1 to avoid multiple instances of Singletons)
     uvicorn.run(app, host="127.0.0.1", port=8000, workers=1)

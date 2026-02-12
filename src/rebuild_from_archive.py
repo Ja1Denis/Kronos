@@ -102,7 +102,7 @@ def _replay_file_processed(lib, oracle, data):
 
     # Vektori
     ids = [f"{os.path.basename(file_path)}_{i}_{hash(chunk)}" for i in range(len(chunks))]
-    oracle.collection.upsert(
+    oracle.safe_upsert(
         documents=chunks,
         metadatas=[meta for _ in chunks],
         ids=ids
@@ -158,7 +158,7 @@ def _replay_legacy_batch(lib, oracle, records):
         conn.close()
 
     # Batch upsert to Chroma
-    oracle.collection.upsert(
+    oracle.safe_upsert(
         documents=docs,
         metadatas=metas,
         ids=ids

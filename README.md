@@ -4,7 +4,9 @@
 Kronos je napredni memorijski sustav koji omogućuje AI agentima (poput mene!) da imaju dugoročno pamćenje, razumiju kontekst projekta i drastično smanje potrošnju tokena putem RAG (Retrieval-Augmented Generation) pristupa.
 
 ## 🌟 Ključne Značajke
+- **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga poznatih pojmova implementirana u **Rustu** (**< 1ms**). Preskače tešku artiljeriju (LLM/Vector) za instantne odgovore.
 - **Hibridna Pretraga**: Kombinira vektorsku pretragu (ChromaDB) za *značenje* i keyword pretragu (SQLite FTS5) za *preciznost*.
+
 - **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`). AI uvijek zna koja je odluka trenutno važeća.
 - **MCP Server**: Integracija s Claude Desktop aplikacijom putem Model Context Protocola.
 - **Strukturirano Znanje**: Automatski izvlači probleme, rješenja, odluke i zadatke.
@@ -94,4 +96,4 @@ Pokreni kompletan testni paket:
 ```
 
 ---
-*Izrađeno s ❤️ za naprednu AI kolaboraciju. Version v2.0.0-evolution*
+*Izrađeno s ❤️ za naprednu AI kolaboraciju. Version v2.1.0-beta-rust*

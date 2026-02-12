@@ -745,11 +745,17 @@ def reindex():
     reindex_entities()
 
 @app.command()
-def wipe():
+def wipe(
+    force: bool = typer.Option(False, "--force", "-f", help="Preskoči potvrdu")
+):
     """
     Briše svu memoriju i resetira bazu.
     """
-    confirm = typer.confirm("[error]Jesi li siguran da želiš obrisati CIJELU memoriju?[/]", default=False)
+    if not force:
+        confirm = typer.confirm("[error]Jesi li siguran da želiš obrisati CIJELU memoriju?[/]", default=False)
+    else:
+        confirm = True
+        
     if confirm:
         with console.status("[bold red]Brišem podatke..."):
             Librarian().wipe_all()

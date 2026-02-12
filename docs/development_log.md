@@ -1,5 +1,66 @@
 # Development Log - Kronos
 
+### [2026-02-11] Faza 10: Pointer System (v2.2.0-alpha-pointer) - IN PROGRESS 🏗️
+- **Cilj:** Drastično smanjenje tokena kroz inteligentne reference (pointere) umjesto punog teksta.
+- **Status:** 🟢 Task 0.3 Completed
+
+- **Ključne promjene:**
+    - **Cleanup (T0.2):** Zaustavljen server, obrisana ChromaDB i SQLite baze, očišćeni cache-ovi. Sustav starta s "nula" podataka kako bi se eliminirali `metadata=None` problemi.
+    - **Dependencies (T0.3):** Instalirani `psutil`, `filelock` i `python-dotenv`.
+    - **Configuration:** Kreiran `.env` za upravljanje budgetima pointera i chunkova.
+    - **Planning:** Detaljno razrađen `kronos_ne_nalazi_podatke.md` plan s 12 faza.
+    - **Type Definitions (Faza 1):** Definirani ključni objekti za novi sustav. `Pointer` sada sadrži `line_range`, `content_hash` i `to_context()` metodu za LLM. Uveden `QueryType` enum za razlikovanje lookup i aggregation upita.
+
+### [2026-02-11] Faza 9: Rust Integration (v2.1.0-beta-rust) - RELEASED 🧪
+- **Cilj:** Implementacija ultrabrzog Rust pretraživača (Fast Path) i službeni Beta izlazak.
+- **Status:** ✅ v2.1.0-beta-rust Released
+
+- **Ključne promjene:**
+    - **Rust Engine (`kronos_core`):** Kreiran visoko-performansni modul u Rustu (PyO3). Implementiran `PrefixTrie` i `exact_index` (HashMap) za trenutno podudaranje nizova.
+    - **Fast Path (L0/L1):** Oracle sada prvo konzultira Rust modul. Ako pronađe točno podudaranje ili prefiks s visokim pouzdanjem (>= 0.9), preskače vektorsku i AI pretragu. Odziv: **< 1ms**.
+    - **PowerShell UX:** Ažurirani `reset_kronos.ps1` i `ask_fast.ps1` s vizualnim "spinnerima" i brojačima vremena za profesionalniji dojam i bolju povratnu informaciju.
+    - **Knowledge Expansion:** `Ingestor` sada podržava moderne web formate: `.js`, `.jsx`, `.tsx`, `.html`. 
+    - **Build & Integration:** Uspješno postavljen `maturin` build proces s release optimizacijama. Modul je integriran u Python codebase s elegantnim fallbackom.
+
+
+- **Cilj:** Vektorizacija i ingestija svih projekata u `ai-test-project` workspace-u.
+- **Status:** ✅ Completed
+- **Ključne promjene:**
+    - **Full Workspace Indexing:** Ingestirano 13 projekata: `cortex-api`, `cortex-search-extracted`, `CroStem`, `crostem_rs`, `CroStem_v012`, `cro_stem`, `kronos`, `SerbStem`, `Skills`, `SlovStem`, `WordpressPlugin`, `WordpressPublisher`, `zip_test`.
+    - **Stats Boost:**
+        - Datoteka: ~22,000
+        - Chunkova: ~49,000
+        - Entiteta: ~13,500
+ ### FAZA 1: TYPE DEFINITIONS (Completed)
+- Kreiran `types.py` i `tests/test_types.py`.
+- Definirane bazične strukture za Pointer System.
+
+### FAZA 2: DEFENSIVE INGEST (Completed)
+- Kreiran `src/utils/metadata_helper.py` za centraliziranu validaciju i obogaćivanje metapodataka.
+- Implementiran `safe_upsert` u `Oracle` i `Librarian`.
+- `Ingestor` sada podržava line-aware chunking (svaki chunk zna svoj start/end line).
+
+### FAZA 3: ORACLE REFACTOR (Completed)
+- Implementirana heuristika za detekciju tipa upita (`LOOKUP`, `AGGREGATION`, `SEMANTIC`).
+- Testirano na datasetu od 50 upita (Točnost: 84%).
+- Implementiran glavni decision tree u `Oracle.ask()`. Sustav sada inteligentno odlučuje hoće li vratiti cijeli chunk (High Confidence) ili samo Pointer (Medium Confidence / Aggregation).
+
+### [2026-02-12] - Security Hardening & Pointer Architecture Finalization
+### Dodano:
+- **Phase 2.5: Validation & Security Hardening**: Implementirana `is_safe_path`, `enforce_metadata_types` i `validate_line_range`. Sustav je sada imun na Path Traversal i DoS napade.
+- **Phase 3.8: Oracle Defensive Programming**: Oracle je postao "robustan". Svi ključni procesi (`ask()`, `_candidate_to_pointer`) su umotani u try-except blokove s fallback mehanizmima.
+- **Phase 4: Response Builders**: Dodani specijalizirani Response Builderi (`pointer_response`, `mixed_response`, `chunk_response`).
+- **Phase 5.5: Budgeter Accounting Safety**: Context Budgeter je dobio audit log i paranoidne provjere alokacije. Procjena tokena sada uključuje safety margin i caps.
+- **Phase 6.6: File Access Hardening**: Implementiran `/fetch_exact` endpoint u serveru. Korištenje `read_file_safe` s OS-level file lockingom (msvcrt/fcntl).
+- **Phase 9.9: Edge Case Test Suite**: Postignuta 100% prolaznost na testovima za Malicious Inputs, Croatian Encoding i Concurrency Stress Test.
+
+### Poboljšano:
+- **Section Title Extraction**: Oracle sada inteligentno izvlači naslove sekcija iz Markdowna (#) za prikaz u pointerima.
+- **Pointer Clustering**: Implementirano grupiranje pointera po direktoriju radi sprječavanja redundancije u kontekstu.
+- **Documentation**: Kreiran `docs/CODING_GUIDELINES.md` kao standard za "Defense in Depth" programiranje.
+
+---
+
 ### [2026-02-10] Faza 8 - Sprint 2: Intelligence & Evaluation (COMPLETED)
 - **Cilj:** Optimizacija Watcher-a i uvođenje metrika kvalitete.
 - **Status:** ✅ Completed

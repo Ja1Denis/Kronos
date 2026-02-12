@@ -54,7 +54,7 @@ class Ingestor:
 
     def _scan_files(self, path, recursive):
         """
-        Pronalazi sve .md i .txt datoteke.
+        Pronalazi sve podržane datoteke, preskačući nepoželjne foldere.
         """
         files = []
         full_path = os.path.abspath(path)
@@ -62,10 +62,37 @@ class Ingestor:
         if os.path.isfile(full_path):
             return [full_path]
 
-        extensions = ["*.md", "*.txt", "*.php", "*.js"]
-        for ext in extensions:
-            pattern = f"**/{ext}" if recursive else ext
-            files.extend(glob.glob(os.path.join(full_path, pattern), recursive=recursive))
+        # Folderi koje UVIJEK preskačemo
+        blacklist = {
+            'node_modules', '.git', '.venv', 'venv', '__pycache__', 
+            '.pytest_cache', 'dist', 'build', '.vscode', '.agent',
+            '.vercel', 'target', 'data', 'logs', 'backups', 'benchmarks',
+            'tests', '.pytest_cache', '.antigravity'
+        }
+
+        if recursive:
+            extensions = [".md", ".txt", ".php", ".js", ".jsx", ".tsx", ".html", ".htm", ".py"]
+            for root, dirs, filenames in os.walk(full_path):
+                # In-place modifikacija dirs liste omogućuje os.walk-u da ih preskoči
+                dirs[:] = [d for d in dirs if d not in blacklist and not d.startswith('.')]
+                
+                for filename in filenames:
+                    # Dodatna provjera za fazaX.md i slične task fajlove
+                    import re
+                    if re.match(r'faza\d+.*\.md$', filename, re.IGNORECASE) or 'handoff' in filename.lower():
+                        continue
+                        
+                    if any(filename.endswith(ext) for ext in extensions):
+                        files.append(os.path.join(root, filename))
+        else:
+            extensions = ["*.md", "*.txt", "*.php", "*.js", "*.jsx", "*.tsx", "*.html", "*.htm", "*.py"]
+            import re
+            for ext in extensions:
+                found = glob.glob(os.path.join(full_path, ext))
+                for f in found:
+                    fname = os.path.basename(f)
+                    if not (re.match(r'faza\d+.*\.md$', fname, re.IGNORECASE) or 'handoff' in fname.lower()):
+                        files.append(f)
         
         return list(set(files)) # Unique files
     
@@ -74,7 +101,9 @@ class Ingestor:
         Čita datoteku, dijeli je na chunkove i sprema.
         """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            from src.utils.file_helper import detect_encoding
+            encoding = detect_encoding(file_path)
+            with open(file_path, 'r', encoding=encoding, errors='replace') as f:
                 content = f.read()
                 
             if not content.strip():
@@ -90,9 +119,17 @@ class Ingestor:
             # 1. Pripremi FTS (očisti stare zapise)
             self.librarian.delete_fts(file_path)
 
-            for chunk in chunks:
-                stemmed_chunk = stem_text(chunk, mode="aggressive")
-                self.librarian.store_fts(file_path, chunk, stemmed_chunk, project=project)
+            for chunk_data in chunks:
+                chunk_text = chunk_data["content"]
+                stemmed_chunk = stem_text(chunk_text, mode="aggressive")
+                self.librarian.store_fts(
+                    file_path, 
+                    chunk_text, 
+                    stemmed_chunk, 
+                    project=project,
+                    start_line=chunk_data.get("start_line", 1),
+                    end_line=chunk_data.get("end_line", 1)
+                )
             
             # 2. Ekstrakcija i pohrana strukturiranih podataka
             extracted_data = self.extractor.extract(content)
@@ -106,12 +143,24 @@ class Ingestor:
             self.librarian.store_archive(chunks, file_meta, extracted_data=extracted_data)
             
             # Vektorizacija (ChromaDB)
-            ids = [f"{os.path.basename(file_path)}_{i}_{hash(chunk)}" for i in range(len(chunks))]
-            metadatas = [file_meta for _ in chunks]
+            ids = []
+            final_metas = []
+            final_docs = []
             
-            self.oracle.collection.upsert(
-                documents=chunks,
-                metadatas=metadatas,
+            for i, chunk_data in enumerate(chunks):
+                uid = f"{os.path.basename(file_path)}_{i}_{hash(chunk_data['content'])}"
+                ids.append(uid)
+                
+                chunk_meta = file_meta.copy()
+                chunk_meta["start_line"] = chunk_data["start_line"]
+                chunk_meta["end_line"] = chunk_data["end_line"]
+                
+                final_metas.append(chunk_meta)
+                final_docs.append(chunk_data["content"])
+            
+            self.oracle.safe_upsert(
+                documents=final_docs,
+                metadatas=final_metas,
                 ids=ids
             )
             
@@ -126,38 +175,38 @@ class Ingestor:
 
     def _chunk_content(self, text):
         """
-        Pametniji chunking baziran na Markdown zaglavljima (#).
-        Pokušava zadržati kontekst zaglavlja.
+        Chunking koji prati brojeve linija.
+        Vraća listu dict-ova: [{'content': str, 'start_line': int, 'end_line': int}]
         """
+        lines = text.splitlines(keepends=True)
         chunks = []
-        import re
+        current_chunk_lines = []
+        current_start_line = 1
+        current_size = 0
         
-        # Razdvajamo po zaglavljima (npr. # Naslov)
-        # Ovo je jednostavna implementacija, LangChain ima bolju.
-        parts = re.split(r'(^#+\s.*$)', text, flags=re.MULTILINE)
-        
-        current_chunk = ""
-        
-        for part in parts:
-            if not part.strip():
-                continue
-                
-            # Ako je zaglavlje, započni novi chunk ako je stari prevelik
-            if re.match(r'^#+\s', part):
-                if len(current_chunk) > self.chunk_size:
-                    chunks.append(current_chunk.strip())
-                    current_chunk = part
-                else:
-                    current_chunk += "\n" + part
-            else:
-                # Običan tekst
-                if len(current_chunk) + len(part) > self.chunk_size:
-                    chunks.append(current_chunk.strip())
-                    current_chunk = part
-                else:
-                    current_chunk += "\n" + part
-                    
-        if current_chunk:
-            chunks.append(current_chunk.strip())
+        for i, line in enumerate(lines):
+            line_num = i + 1
+            line_len = len(line)
+            
+            # Ako dodavanje linije prelazi chunk_size, spremi trenutni chunk
+            if current_size + line_len > self.chunk_size and current_chunk_lines:
+                chunks.append({
+                    "content": "".join(current_chunk_lines).strip(),
+                    "start_line": current_start_line,
+                    "end_line": line_num - 1
+                })
+                current_chunk_lines = []
+                current_start_line = line_num
+                current_size = 0
+            
+            current_chunk_lines.append(line)
+            current_size += line_len
+            
+        if current_chunk_lines:
+            chunks.append({
+                "content": "".join(current_chunk_lines).strip(),
+                "start_line": current_start_line,
+                "end_line": len(lines)
+            })
             
         return chunks

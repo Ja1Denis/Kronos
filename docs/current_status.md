@@ -1,7 +1,32 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-02-10 H2
+Datum: 2026-02-11 | Version: v2.1.0-beta-rust 🧪
 
-## 🚀 Status: Faza 8 - THE AGENTIC LEAP (COMPLETED)
+
+### 🚀 Status: Faza 10 - THE POINTER REVOLUTION (IN PROGRESS 🏗️)
+Kronos prolazi kroz temeljitu rekonstrukciju sistema za dohvat konteksta. Cilj je uvođenje "Pointer Systema" koji umjesto masivnih blokova teksta šalje sažete reference (pointere), smanjujući potrošnju tokena za dodatnih 50-70%.
+
+### [2026-02-11] Faza 10 Postignuća:
+- **Task 0.2: Čišćenje Indexa (COMPLETED):** Indeks je očišćen od korumpiranih/nepotpunih metapodataka (`metadata=None`). Obrađen reset baze i cache-a.
+- **Task 0.3: Environment Setup (COMPLETED):** Instalirani novi dependencies (`psutil`, `filelock`, `python-dotenv`) i postavljen `.env` sustav konfiguracije.
+- **Faza 1 (Type Definitions)**: ✅ Završena. Kreirani `Pointer`, `SearchResult` i `QueryType` u `src/modules/types.py`.
+- **Faza 2 (Defensive Ingest)**: ✅ Završena. Implementiran `safe_upsert`, validacija metapodataka i line-aware chunking.
+- **Status**: Faza 2 i 3 su dovršene, implementirana je "Security & Edge Case Hardening" faza (2.5, 3.8, 5.5, 6.6).
+- **Zadnji Update**: Implementiran Pointer System s decision tree-om, `read_file_safe` s lockingom, `/fetch_exact` endpoint, i robusna validacija metapodataka.
+- **Problem**: Inicijalni problem s `404 models/gemini-pro` je ranije riješen, fokus je sada na stabilnosti "Long Context" sustava.
+- **Plan**: Nastaviti s implementacijom Faze 7 (Live Sync) i Faze 8 (Monitoring).
+
+### 🚀 Status: Faza 9 - THE SPEED LEAP (COMPLETED)
+Kronos je doživio značajan skok u performansama integracijom Rust "Fast Path" mehanizma. Pretraga poznatih entiteta i projekata sada je trenutna.
+
+### [2026-02-11] Faza 9 Postignuća:
+- **Rust Fast-Path (T051):** Uvedena L0/L1 pretraga u Rustu (`kronos_core`). Latencija: **< 1ms**.
+- **Hybrid Efficiency:** Implementirano "short-circuiting" pravilo - ako Rust nađe točan pogodak, LLM i vektorska pretraga se preskaču.
+- **PowerShell UX Overhaul:** `reset_kronos.ps1` i `ask_fast.ps1` dobili vizualne indikatore (spinneri) i tajmere.
+- **Knowledge Expansion:** `Ingestor` podržava `.js`, `.jsx`, `.tsx`, `.html`.
+- **Hybrid Optimization:** Optimizirana FTS5 pretraga u SQLite-u za bolju sinergiju s Rustom.
+
+
+### [2026-02-10] Faza 8 - THE AGENTIC LEAP (COMPLETED)
 Kronos je uspješno transformiran u proaktivnog, asinkronog AI suradnika.
 
 ### [2026-02-10] Faza 8 Postignuća:
@@ -10,9 +35,10 @@ Kronos je uspješno transformiran u proaktivnog, asinkronog AI suradnika.
 - **Proaktivna Inteligencija:** `ProactiveAnalyst` detektira kontradikcije koristeći `gemini-2.0-flash`.
 - **Real-time Notifikacije:** SSE stream (`/stream`) omogućuje klijentima praćenje rada servera u stvarnom vremenu.
 - **Stress-Tested:** Sustav je testiran pod ekstremnim opterećenjem paralelnih upita i promjena datoteka. `kronos jobs` za kontrolu asinkronih procesa.
-    - **Benchmark Runner (T048):** Naredba `kronos evaluate` za analizu preciznosti (Recall@5).
+- **Workspace Expansion:** Ingestirano svih 13 projekata (~22,000 datoteka, ~50,000 chunkova).
 
-### [2026-02-10] Sprint 1: Job Queue Foundation (COMPLETED)
+### 2026-02-10] Sprint 1: Job Queue Foundation (COMPLETED)
+
 
 - [2026-02-10] **Faza 8 Sprint 4 (Proactivity)**: Implementiran `NotificationManager` (SSE) i `ProactiveAnalyst`. Sustav sada sam šalje obavijesti o kontradikcijama koje pronađe u novom kodu/tekstu.
 - [2026-02-10] **Faza 8 Sprint 3 (Agentic Tools)**: MCP server funkcionalan sa 7 alata. Testirano kroz `verify_mcp_tools.py`.
@@ -23,8 +49,15 @@ Kronos je uspješno transformiran u proaktivnog, asinkronog AI suradnika.
 - **Context Budgeter:** Dinamičko upravljanje tokenima (Light/Auto/Extra).
 - **The Three Corpses (T034):** Potpuna debug podrška (Code + Diffs + Logs).
 
-### ⚠️ Poznati Problemi / TODO
-- (Next) Sprint 2: Watcher Intelligence & Evaluation (Batching logic).
+### ⏭️ Sljedeći koraci (Phase 9 & 10)
+- **Faza 9: User Experience (The Dashboard)**
+    - Izrada centralnog GUI-ja (Vite/React) za vizualizaciju Job Queue i SSE notifikacija.
+    - Dodavanje vizualnog prikaza "razmišljanja" (Thought process) Proactive Analysta.
+- **Faza 10: Deep IDE Integration**
+    - Razvoj VS Code ekstenzije koja koristi Kronos SSE stream za proaktivne sugestije izravno u editoru.
+- **Optimizacija & Poliranje**
+    - Implementacija perzistentnog cache-a za Historian analize kako bi se izbjegli redundantni LLM pozivi.
+    - Fine-tuning Gemini Thinking modela za specifične zadatke analize arhitekture.
 
 ---
 
@@ -61,9 +94,9 @@ Projekt je postavljen kao **Default Baseline** verzija (2026-02-09). Fokus je bi
 - **RAG Evaluation**: Proširenje benchmark skripte.
 
 ### 📊 Statistika Baze:
-- **Indeksirano datoteka**: ~2400 (uključujući testne projekte)
-- **Ukupno chunkova**: ~14000
-- **Ekstrahirano znanje**: Preko 10,000 entiteta.
+- **Indeksirano datoteka**: ~22,000 (Svi projekti u `ai-test-project`)
+- **Ukupno chunkova**: ~49,000
+- **Ekstrahirano znanje**: Preko 13,500 entiteta.
 
 ### 🛠️ Tehnički Dug / Napomene:
 - Riješen problem s prikazom `rich` panela na Windows CLI-u (prelazak na `print` za stabilnost).
