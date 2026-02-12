@@ -95,19 +95,28 @@ cd Kronos
 pip install -r requirements.txt
 ```
 
-### 2. Pokreni Ingestiju (Učitavanje znanja)
+### 2. Konfiguracija 🔑
+Kronos koristi **Gemini API** za naprednu sintezu i ekstrakciju znanja.
+1.  U radnom prostoru projekta, kreiraj mapu `.agent` (ako već ne postoji).
+2.  Unutar mape `.agent` kreiraj datoteku `.env`.
+3.  Dodaj svoj API ključ:
+```env
+GEMINI_API_KEY=vaš_gemini_api_ključ_ovdje
+```
+
+### 3. Pokreni Ingestiju (Učitavanje znanja)
 ```powershell
 # Učitaj cijeli radni prostor odjednom
 python .\ingest_everything.py
 ```
 
-### 3. Pokreni Server
+### 4. Pokreni Server
 ```powershell
 # Postavi PYTHONPATH i pokreni API
 $env:PYTHONPATH="."; python src/server.py
 ```
 
-### 4. Prvi Upit
+### 5. Prvi Upit
 ```powershell
 .\ask_fast.ps1 -Query "Što Kronos radi sa tokenima?"
 ```
