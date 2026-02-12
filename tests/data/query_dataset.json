@@ -1,0 +1,202 @@
+[
+    {
+        "query": "What is the goal of Kronos?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "Where is the database stored?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "List all decisions from today",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "How many files were indexed?",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "What are the core modules?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "Show all tasks for project X",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "Who made the decision about Rust?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "Total tokens used yesterday?",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "Summarize all release notes",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "Tell me about the architectura",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "How does the indexing work?",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "zbroji sve tokene",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "popis svih zadataka",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "tko je radio na projektu?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "gdje mogu naći logove?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "What is the latest status?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "List all projects",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "Count the number of entities",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "What happened in the meeting?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "Is there a circular reference?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "Explain the pointer system",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "Give me everything about RAG",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "All recent changes",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "Why was ChromaDB chosen?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "When was the last ingest?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "što je cilj projekta?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "gdje se nalazi venv?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "koliko ima chunkova?",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "ispis svih grešaka",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "kako radi oracle?",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "koje datoteke su u src folderu?",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "search for keyword 'test'",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "daj mi sve o rust projektu",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "što smo odlučili o portu 8000?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "sve odluke donesene u veljači",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "summary of the whole project",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "što fali u dokumentaciji?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "list features",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "count lines of code",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "what is the next task?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "who is the owner?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "overview of progress",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "daj sve datoteke kronosa",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "koliko memorije troši?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "architecture overview",
+        "expected_type": "semantic"
+    },
+    {
+        "query": "what are the known issues?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "list bugs",
+        "expected_type": "aggregation"
+    },
+    {
+        "query": "is the server running?",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "show current status",
+        "expected_type": "lookup"
+    },
+    {
+        "query": "history of project",
+        "expected_type": "semantic"
+    }
+]

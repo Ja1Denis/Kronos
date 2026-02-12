@@ -8,9 +8,11 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\run.ps1 serve" 
 Write-Host "⏳ Učitavam AI modele (ovo traje ~15 sekundi samo prvi put)..." -ForegroundColor Yellow
 
 # 2. Čekaj dok server ne postane 'Healthy'
-$maxRetries = 30
+$maxRetries = 60
 $retryCount = 0
 $serverReady = $false
+$StartTime = [System.Diagnostics.Stopwatch]::StartNew()
+$Spinner = @('|', '/', '-', '\')
 
 while (-not $serverReady -and $retryCount -lt $maxRetries) {
     try {
@@ -20,17 +22,18 @@ while (-not $serverReady -and $retryCount -lt $maxRetries) {
         }
     }
     catch {
+        $Elapsed = [math]::Round($StartTime.Elapsed.TotalSeconds, 1)
+        Write-Host -NoNewline "`r⏳ Učitavam AI modele... $($Spinner[$retryCount % 4]) [$($Elapsed)s] " -ForegroundColor Yellow
         $retryCount++
-        Start-Sleep -Seconds 1
-        Write-Host "." -NoNewline
+        Start-Sleep -Milliseconds 500
     }
 }
 
 if ($serverReady) {
-    Write-Host "`n✅ Kronos je SPREMAN!" -ForegroundColor Green
+    Write-Host "`n`n✅ Kronos je SPREMAN!" -ForegroundColor Green
     Write-Host "Sada možeš koristiti: " -NoNewline
     Write-Host ".\ask_fast.ps1 -Query '...'" -ForegroundColor White -BackgroundColor DarkBlue
 }
 else {
-    Write-Host "`n❌ Server se nije pokrenuo na vrijeme. Provjeri terminal za greške." -ForegroundColor Red
+    Write-Host "`n`n❌ Server se nije pokrenuo na vrijeme. Provjeri terminal za greške." -ForegroundColor Red
 }
