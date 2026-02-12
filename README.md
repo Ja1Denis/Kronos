@@ -37,7 +37,23 @@ Učitaj projekt kako bi Kronos naučio o njemu:
 .\run.ps1 ingest "." -Recursive
 ```
 
-### 3. Ručni Unos Znanja
+### 3. Skupna Ingestija (Full Workspace Ingest)
+Učitaj sve projekte u radnom prostoru odjednom:
+```powershell
+python .\ingest_everything.py
+```
+
+### 4. Reset i Čišćenje
+Ako je baza podataka postala nekonzistentna ili želiš svjež početak:
+```powershell
+# Interaktivni wipe
+.\run.ps1 wipe
+
+# Prisilni wipe (bez potvrde)
+.\run.ps1 wipe --force
+```
+
+### 5. Ručni Unos Znanja
 Dodaj važnu informaciju ili odluku bez pisanja datoteka:
 ```powershell
 python -m src.cli save "Opis tvoje odluke" --as decision --project kronos
