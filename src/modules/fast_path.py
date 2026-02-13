@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 from typing import List, Dict, Any, Optional
 
 class PrefixTrie:
@@ -42,6 +43,7 @@ class FastPath:
     def __init__(self, librarian=None):
         self.librarian = librarian
         self.is_warmed_up = False
+        self._lock = threading.Lock() # Thread safety for Rust FFI
         
         # Baseline structures
         self.exact_index: Dict[str, Dict[str, Any]] = {}
@@ -52,22 +54,21 @@ class FastPath:
         try:
             from src.modules.kronos_core import FastPath as RustFastPath
             self.rust_engine = RustFastPath()
-            print("🚀 FastPath: Rust engine učitan!")
+            # print("--- FastPath: Rust engine ucitan! ---")
         except ImportError:
-            print("⚠️ FastPath: Rust engine nije pronađen, koristim Python fallback.")
+            # print("INFO: FastPath: Rust engine nije pronadjen, koristim Python fallback.")
+            pass
 
     def warmup(self):
         """Puni memorijski indeks najvažnijim entitetima radi brzine."""
         if not self.librarian:
             return
             
-        print("🔥 FastPath: Zagrijavam memorijski indeks...")
+        print("--- FastPath: Zagrijavam memorijski indeks... ---")
         # 1. Dohvati sve entitete (odluke, naslove, emailove)
         # Ovdje simuliramo punjenje iz SQLite-a
         stats = self.librarian.get_stats()
         if stats.get('entities'):
-            # Dohvati zadnjih 500 entiteta za početak
-            from src.modules.librarian import Librarian
             # Koristimo direktan upit za brzinu
             import sqlite3
             conn = sqlite3.connect(self.librarian.meta_path)
@@ -80,26 +81,36 @@ class FastPath:
                 if content is None:
                     continue
                 
-                if self.rust_engine:
-                    self.rust_engine.insert(content, content)
-                else:
-                    doc = {
-                        "content": content,
-                        "metadata": {"source": path, "project": project, "type": etype},
-                        "score": 1.0
-                    }
-                    # Index za literal match (emailovi, kratki stringovi)
-                    if len(content) < 100:
-                        self.exact_index[content.lower().strip()] = doc
-                    
-                    # Index za prefix (samo za važne riječi)
-                    words = content.split()
-                    for word in words[:3]: # Prve 3 riječi su obično najvažnije
-                        if len(word) > 2:
-                            self.prefix_trie.insert(word, doc)
-                    
-                    if "@" in content: # Specijalno za emailove
-                        self.prefix_trie.insert(content, doc) # No change here, just part of block
+                doc = {
+                    "content": content,
+                    "metadata": {"source": path, "project": project, "type": etype},
+                    "score": 1.0
+                }
+
+                # Index za literal match (emailovi, kratki stringovi)
+                content_lower = content.lower().strip()
+                if len(content) < 100:
+                    self.exact_index[content_lower] = doc
+                    if self.rust_engine:
+                        with self._lock:
+                            self.rust_engine.insert(content_lower, content)
+                
+                # Index za prefix i ključne riječi (pomaže da 'T034' nadje cijelu rečenicu)
+                words = content.split()
+                for word in words: 
+                    word_clean = word.lower().strip().strip(".,!?\"'()")
+                    if len(word_clean) > 2:
+                        self.prefix_trie.insert(word_clean, doc)
+                        # Također dodajemo važne riječi u Rust engine kao ključeve
+                        if self.rust_engine and (len(word_clean) > 3 or any(c.isdigit() for c in word_clean)):
+                            with self._lock:
+                                self.rust_engine.insert(word_clean, content)
+                
+                if "@" in content: # Specijalno za emailove
+                    self.prefix_trie.insert(content_lower, doc)
+                    if self.rust_engine:
+                        with self._lock:
+                            self.rust_engine.insert(content_lower, content)
 
             # 2. DODATNO: Indexiraj imena projekata kao super-brze ulaze
             from src.modules.librarian import Librarian
@@ -107,20 +118,23 @@ class FastPath:
             proj_stats = lib.get_project_stats()
             for p_name in proj_stats.keys():
                 if p_name:
+                    p_name_lower = p_name.lower()
                     if self.rust_engine:
-                        self.rust_engine.insert(p_name, f"Projekt: {p_name}")
-                    else:
-                        p_doc = {
-                            "content": f"Projekt: {p_name}",
-                            "metadata": {"project": p_name, "type": "PROJECT_METADATA"},
-                            "score": 1.0
-                        }
-                        self.exact_index[p_name.lower()] = p_doc
-                        self.prefix_trie.insert(p_name, p_doc)
+                        with self._lock:
+                            self.rust_engine.insert(p_name_lower, f"Projekt: {p_name}")
+                    
+                    p_doc = {
+                        "content": f"Projekt: {p_name}",
+                        "metadata": {"project": p_name, "type": "PROJECT_METADATA"},
+                        "score": 1.0
+                    }
+                    self.exact_index[p_name_lower] = p_doc
+                    self.prefix_trie.insert(p_name_lower, p_doc)
 
         self.is_warmed_up = True
-        count = self.rust_engine.__len__() if self.rust_engine else len(self.exact_index)
-        print(f"✅ FastPath zagrijan s {count} literalnih ulaza.")
+        # with self._lock:
+        #     count = self.rust_engine.__len__() if self.rust_engine else len(self.exact_index)
+        # print(f"DONE: FastPath zagrijan s {count} literalnih ulaza.")
 
     def search(self, query: str) -> Optional[Dict[str, Any]]:
         """
@@ -128,17 +142,19 @@ class FastPath:
         Vraća rezultate samo ako je 'confidence' maksimalan.
         """
         if self.rust_engine:
-            rust_res = self.rust_engine.search(query)
+            with self._lock:
+                rust_res = self.rust_engine.search(query)
+            
             if rust_res:
-                print(f"DEBUG: FastPath Rust Match found for '{query}': {rust_res['type']}")
+                print(f"DEBUG: FastPath Rust Match found for '{query}': {rust_res.get('type')}")
                 return {
-                    "type": rust_res["type"],
-                    "confidence": rust_res["confidence"],
+                    "type": rust_res.get("type", "ExactMatch"),
+                    "confidence": rust_res.get("confidence", 1.0),
                     "data": {
                         "entities": [{
-                            "content": rust_res["content"],
+                            "content": rust_res.get("content", ""),
                             "metadata": {"source": "rust_fast_path"},
-                            "score": rust_res["confidence"]
+                            "score": rust_res.get("confidence", 1.0)
                         }],
                         "chunks": []
                     }

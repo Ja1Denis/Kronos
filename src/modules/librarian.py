@@ -26,6 +26,24 @@ class Librarian:
 
         # Inicijalizacija
         self._init_sqlite()
+        
+        # Učitaj varijable za Gemini embeddings
+        from dotenv import load_dotenv
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        load_dotenv(os.path.join(project_root, '.agent', '.env'))
+        
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.embedding_function = None
+        if self.api_key:
+            try:
+                from chromadb.utils import embedding_functions
+                self.embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
+                    api_key=self.api_key,
+                    model_name="models/gemini-embedding-001"
+                )
+            except Exception as e:
+                print(f"⚠️ Librarian: Could not init Gemini embeddings: {e}")
+
         # Chroma se inicijalizira lazy (na prvi poziv)
         self.chroma_client = None
 
@@ -33,10 +51,16 @@ class Librarian:
         """Helper za dohvat ChromaDB kolekcije."""
         if not self.chroma_client:
             self.chroma_client = chromadb.PersistentClient(path=self.store_path)
-        return self.chroma_client.get_or_create_collection(name="kronos_memory")
+        return self.chroma_client.get_or_create_collection(
+            name="kronos_memory",
+            embedding_function=self.embedding_function
+        )
 
     def _index_entity(self, eid, etype, content, project=None, source=None):
         """Indeksira entitet u ChromaDB za semantičku pretragu."""
+        if not content or not content.strip():
+            return
+            
         try:
             collection = self._get_collection()
             meta = {
@@ -49,7 +73,7 @@ class Librarian:
             }
             
             if not validate_metadata(meta):
-                print(f"{Fore.RED}❌ Metadata Validation Failed for entity_{eid}. Skipping.{Style.RESET_ALL}")
+                print(f"{Fore.RED}ERROR: Metadata Validation Failed for entity_{eid}. Skipping.{Style.RESET_ALL}")
                 return
                 
             # Enrich metadata
@@ -97,7 +121,7 @@ class Librarian:
             cols = [c[1] for c in cursor.fetchall()]
             
             if cols and "start_line" not in cols:
-                logger.info("⚡ Migracija: Nadogradnja FTS tablice (start_line, end_line)...")
+                logger.info("INFO: Migracija: Nadogradnja FTS tablice (start_line, end_line)...")
                 cursor.execute("DROP TABLE knowledge_fts")
             
             cursor.execute('''
@@ -111,7 +135,7 @@ class Librarian:
                 )
             ''')
         except sqlite3.OperationalError:
-            print(f"{Fore.YELLOW}⚠️ Upozorenje: Tvoj SQLite možda ne podržava FTS5. Hybrid search neće raditi punim kapacitetom.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}WARNING: Tvoj SQLite mozda ne podrzava FTS5. Hybrid search nece raditi punim kapacitetom.{Style.RESET_ALL}")
 
         # 3. Tabela za ekstrahirane entitete
         cursor.execute('''
@@ -253,6 +277,8 @@ class Librarian:
                 return self.search_fts(query_stemmed, project=project, limit=limit, mode="or")
 
         except Exception as e:
+            from src.utils.metrics import metrics
+            metrics.log_failure("fts")
             print(f"{Fore.RED}Greška pri FTS pretrazi [mode={mode}]: {e}{Style.RESET_ALL}")
             results = []
             
@@ -433,7 +459,7 @@ class Librarian:
             with open(self.archive_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
         except Exception as e:
-            print(f"{Fore.RED}❌ Greška pri logiranju događaja: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}ERROR: Greska pri logiranju dogadjaja: {e}{Style.RESET_ALL}")
 
     def store_archive(self, chunks, file_metadata, extracted_data=None):
         """Sprema chunkove i entitete u JSONL arhivu kao EVENT."""

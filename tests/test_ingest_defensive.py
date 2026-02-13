@@ -1,21 +1,20 @@
 import pytest
 from src.modules.oracle import Oracle
+from src.utils.metadata_helper import validate_metadata
 
 def test_metadata_validation_basics():
-    oracle = Oracle(db_path="data/store_test")
-    
     # Valid metadata
-    assert oracle.validate_metadata({"source": "test.py", "start_line": 1, "end_line": 10}) is True
+    assert validate_metadata({"source": "test.py", "start_line": 1, "end_line": 10}) is True
     
     # Missing source
-    assert oracle.validate_metadata({"start_line": 1}) is False
+    assert validate_metadata({"start_line": 1}) is False
     
     # Invalid line type
-    assert oracle.validate_metadata({"source": "test.py", "start_line": "1"}) is False
+    assert validate_metadata({"source": "test.py", "start_line": "1"}) is False
     
     # None or empty
-    assert oracle.validate_metadata(None) is False
-    assert oracle.validate_metadata({}) is False
+    assert validate_metadata(None) is False
+    assert validate_metadata({}) is False
 
 def test_safe_upsert_enrichment(tmp_path):
     # Mocking collection to avoid real DB if possible, or just use a test DB

@@ -7,15 +7,54 @@ from colorama import Fore, Style
 import chromadb
 import os
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential
 from src.utils.metadata_helper import validate_metadata, enrich_metadata
 from src.modules.types import QueryType, Pointer, SearchResult
+from src.utils.metrics import metrics
+from src.utils.logger import logger
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5))
+def resilient_vector_query(collection, query, n_results=5, where=None):
+    """Retry vector query do 3 puta s exponential backoff"""
+    try:
+        return collection.query(query_texts=[query], n_results=n_results, where=where)
+    except Exception as e:
+        logger.warning(f"Vector query retry due to: {e}")
+        metrics.log_failure("vector")
+        raise  # Re-raise da retry logic uhvati
 
 class Oracle:
     def __init__(self, db_path="data/store"):
         self.db_path = db_path
         self._lock = threading.Lock() # Global lock for thread safety
+        
+        # Učitaj varijable iz .agent/.env datoteke
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        workspace_root = os.path.dirname(project_root)
+        env_path = os.path.join(workspace_root, '.agent', '.env')
+        load_dotenv(env_path)
+        
+        # Use Gemini for embeddings to avoid local model crashes on Windows
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                from chromadb.utils import embedding_functions
+                self.embedding_function = embedding_functions.GoogleGenerativeAiEmbeddingFunction(
+                    api_key=api_key,
+                    model_name="models/gemini-embedding-001"
+                )
+            except Exception as e:
+                print(f"⚠️ Warning: Could not init Gemini embeddings: {e}")
+                self.embedding_function = None
+        else:
+            self.embedding_function = None
+
         self.client = chromadb.PersistentClient(path=db_path)
-        self.collection = self.client.get_or_create_collection(name="kronos_memory")
+        self.collection = self.client.get_or_create_collection(
+            name="kronos_memory",
+            embedding_function=self.embedding_function
+        )
         
         from src.modules.librarian import Librarian
         self.librarian = Librarian()
@@ -24,7 +63,7 @@ class Oracle:
         try:
             from src.modules.fast_path import FastPath
             self.fast_path = FastPath(self.librarian)
-            # Pokrećemo warmup u zasebnom threadu da ne blokira start
+            # Pokrećemo warmup u zasebnom threadu (sada sigurno uz lockove)
             threading.Thread(target=self.fast_path.warmup, daemon=True).start()
         except ImportError:
             self.fast_path = None
@@ -227,17 +266,27 @@ class Oracle:
         """Privatna metoda za fetch, poziva se unutar ask locka"""
         vector_query = query
         if hyde and self.hypothesizer:
-             vector_query = self.hypothesizer.generate_hypothetical_answer(query)
+             print(f"DEBUG: Oracle: generating hypothesis for '{query}'...")
+             vector_query = self.hypothesizer.generate_hypothesis(query)
         
         where_filter = None
         if project:
              where_filter = {"project": project}
              
-        vector_candidates = self.collection.query(
-            query_texts=[vector_query],
-            n_results=limit * 4,
-            where=where_filter
-        )
+        # print(f"DEBUG: Oracle: querying vector collection for '{vector_query[:50]}...'")
+        metrics.log_query()
+        try:
+            vector_candidates = resilient_vector_query(
+                self.collection, 
+                vector_query, 
+                n_results=limit * 4, 
+                where=where_filter
+            )
+        except Exception as e:
+            logger.error(f"Vector query failed after retries: {e}")
+            vector_candidates = {'ids': [[]]} # Fallback
+            
+        # print("DEBUG: Oracle: vector query done.")
         
         # Stemmed query za FTS (Hybrid AND mode by default)
         try:
@@ -289,7 +338,8 @@ class Oracle:
                         fast_res = self.fast_path.search(query)
                         if fast_res and fast_res["confidence"] >= 0.9:
                             if not silent: 
-                                print(f"{Fore.GREEN}⚡ FastPath: {fast_res['type']} detektiran!{Style.RESET_ALL}")
+                                # print(f"{Fore.GREEN}⚡ FastPath: {fast_res['type']} detektiran!{Style.RESET_ALL}")
+                                pass
                             return {
                                 "entities": [{
                                     "id": "fp_" + str(hash(e.get('content', ''))),
@@ -304,15 +354,23 @@ class Oracle:
                     except Exception as e:
                         print(f"{Fore.YELLOW}⚠️ FastPath error: {e}{Style.RESET_ALL}")
 
-                # 1. Detektiraj tip upita
+                # 1. Detektiraj tip upita i temporalne markere
                 try:
                     query_type = self.detect_query_type(query)
+                    temporal_keywords = [
+                        "zadnje", "zadnji", "zadnjih", "nedavno", "latest", "recent", 
+                        "novo", "update", "v0.", "v1.", "danas", "today", "promjene", 
+                        "izmjene", "radili", "napravili", "status", "log"
+                    ]
+                    is_temporal = any(k in query.lower() for k in temporal_keywords)
                 except Exception:
                     query_type = QueryType.SEMANTIC # Default fallback
+                    is_temporal = False
                 
                 if not silent:
-                     print(f"{Fore.CYAN}🔎 Tip upita: {query_type.value.upper()}{Style.RESET_ALL}")
-
+                     temporal_status = " [TEMPORAL BOOST]" if is_temporal else ""
+                     # print(f"{Fore.CYAN}--- Tip upita: {query_type.value.upper()}{temporal_status} ---{Style.RESET_ALL}")
+                
                 # 2. Query Expansion (Samo za Semantic)
                 queries = [query]
                 if expand and self.hypothesizer and query_type == QueryType.SEMANTIC:
@@ -332,81 +390,126 @@ class Oracle:
                     except Exception as e:
                         print(f"{Fore.YELLOW}⚠️ Retrieval error for query '{q}': {e}{Style.RESET_ALL}")
                 
+                # FTS FALLBACK / RECALL IMPROVEMENT
+                # Ako imamo malo kandidata, pokušaj širi FTS (OR mode)
+                if len(all_candidates) < 5:
+                    try:
+                        stemmed_q = query.lower()
+                        wider_fts = self.librarian.search_fts(stemmed_q, project=project, limit=limit, mode="or")
+                        for c in wider_fts:
+                            path, content, start, end = c
+                            all_candidates.append({
+                                "id": f"fts_or_{path}_{hash(content)}",
+                                "content": content,
+                                "metadata": {"source": path, "start_line": start, "end_line": end},
+                                "score": 0.5,
+                                "method": "Keyword-Wide"
+                            })
+                    except Exception: pass
+
                 # DEFENSE: Check candidates validity
                 if not all_candidates:
-                    if not silent: print(f"{Fore.YELLOW}⚠️ No candidates found for query.{Style.RESET_ALL}")
+                    if not silent: print(f"{Fore.YELLOW}WARNING: No candidates found for query.{Style.RESET_ALL}")
                     return self._empty_response("No relevant information found.")
 
-                # 4. Deduplikacija i rangiranje
+                # 4. Deduplikacija i RANGIRANJE (Temporal Tuning)
                 seen_ids = set()
                 unique_candidates = []
                 
-                # Sort safely by score
-                def safe_score(c):
+                def calculate_boosted_score(c):
                     try:
-                        score = c.get('score', 0.0)
-                        return float(score) if isinstance(score, (int, float, str)) else 0.0
+                        base_score = float(c.get('score', 0.0))
+                        if is_temporal:
+                            # Pokušaj dobiti timestamp iz metapodataka
+                            meta = c.get('metadata', {})
+                            last_mod = float(meta.get('last_modified', 0))
+                            current_time = datetime.now().timestamp()
+                            age_seconds = current_time - last_mod
+                            
+                            # Temporalni boost: progresivno veći za novije stvari
+                            # < 48h: 1.0, < 1 tjedan: 0.5, ostalo: 0
+                            recency_boost = 1.0 if age_seconds < 172800 else (0.5 if age_seconds < 604800 else 0)
+                            
+                            # Utility score formula
+                            boosted = (base_score * 0.3) + (recency_boost * 0.7)
+                            c['utility_score'] = boosted # Store for classification phase
+                            return boosted
+                        
+                        c['utility_score'] = base_score
+                        return base_score
                     except Exception:
                         return 0.0
 
-                for cand in sorted(all_candidates, key=safe_score, reverse=True):
+                sorted_cands = sorted(all_candidates, key=calculate_boosted_score, reverse=True)
+
+                for cand in sorted_cands:
                     cid = cand.get('id')
                     if cid and cid not in seen_ids:
                         unique_candidates.append(cand)
                         seen_ids.add(cid)
                 
-                
-                # 5. Decision Tree / Classification
+                # 5. Decision Tree / Classification (Project Map Logic)
                 final_chunks = []
                 final_pointers = []
                 final_entities = []
                 query_keywords = self.extract_keywords(query)
                 
-                if query_type == QueryType.AGGREGATION:
-                    if len(unique_candidates) > 5:
-                        for cand in unique_candidates:
-                            if cand.get('method') in ['Vector', 'Keyword']:
-                                 p = self._candidate_to_pointer(cand, query_keywords)
-                                 if p: final_pointers.append(p)
-                            else:
-                                 final_entities.append(cand)
-                    else:
-                        for cand in unique_candidates:
-                            if cand.get('method') in ['Vector', 'Keyword']:
-                                 final_chunks.append(cand)
-                            else:
-                                 final_entities.append(cand)
-                                 
-                elif query_type == QueryType.LOOKUP:
-                    for cand in unique_candidates:
-                        score = safe_score(cand)
-                        if score > 0.75:
-                            final_chunks.append(cand)
-                        elif score > 0.4:
-                            p = self._candidate_to_pointer(cand, query_keywords)
-                            if p: final_pointers.append(p)
+                # Pragovi su sada fleksibilniji, pogotovo za temporalne upite
+                chunk_threshold = 0.5 if is_temporal else 0.65
+                pointer_threshold = 0.1 # Vrlo nisko da dobijemo "Project Map"
                 
-                else: # SEMANTIC
-                    for i, cand in enumerate(unique_candidates):
-                        score = safe_score(cand)
-                        if i < 3 and score > 0.6:
-                            final_chunks.append(cand)
-                        else:
-                            p = self._candidate_to_pointer(cand, query_keywords)
-                            if p: final_pointers.append(p)
+                for i, cand in enumerate(unique_candidates):
+                    u_score = cand.get('utility_score', 0.0)
+                    method = cand.get('method', 'unknown')
+                    
+                    if method == 'Entity':
+                        final_entities.append(cand)
+                        continue
 
+                    # Ako je visoki score ili top rezultat kod temporalnog upita -> chunk
+                    if u_score >= chunk_threshold or (is_temporal and i < 5):
+                        final_chunks.append(cand)
+                    # Sve ostalo što ima bilo kakav smisao ide u Pointers (Project Map)
+                    elif u_score >= pointer_threshold:
+                        p = self._candidate_to_pointer(cand, query_keywords)
+                        if p: final_pointers.append(p)
 
-                # 6. Clustering
+                # 6. Clustering i Finalni odgovor
                 final_pointers = self.cluster_pointers(final_pointers)
 
-                # 7. Response Construction with specialized builders
-                if final_chunks and final_pointers:
-                    resp = self.build_mixed_response(final_chunks, final_pointers)
-                elif final_chunks:
-                    resp = self.build_chunk_response(final_chunks)
-                elif final_pointers:
-                    resp = self.build_pointer_response(final_pointers)
+                if final_chunks or final_pointers or final_entities:
+                    if final_chunks and final_pointers:
+                        resp = self.build_mixed_response(final_chunks, final_pointers)
+                    elif final_chunks:
+                        resp = self.build_chunk_response(final_chunks)
+                    else:
+                        resp = self.build_pointer_response(final_pointers)
                 else:
+                    # AMBIGUITY HANDLING: Ako nema rezultata, a upit spominje projekt
+                    project_markers = ["projekt", "project", "ovom", "this", "ovi"]
+                    if any(m in query.lower() for m in project_markers):
+                        # Dohvati popis svih projekata iz baze
+                        try:
+                            import sqlite3
+                            conn = sqlite3.connect(self.librarian.meta_path)
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT DISTINCT project FROM knowledge_fts WHERE project IS NOT NULL")
+                            projects = [row[0] for row in cursor.fetchall()]
+                            conn.close()
+                            
+                            if projects:
+                                return {
+                                    "status": "ambiguous",
+                                    "message": f"Nisam siguran na koji projekt misliš. U bazi imam: {', '.join(projects)}.",
+                                    "projects": projects,
+                                    "entities": [], "chunks": [], "pointers": []
+                                }
+                        except Exception: pass
+
+                    # FALLBACK: Probaj globalno ako je filter bio postavljen
+                    if project:
+                        return self.ask(query, project=None, limit=limit, silent=silent)
+                    
                     resp = self._empty_response("No relevant information found.")
 
                 # Add extra fields for debugging/backward compatibility

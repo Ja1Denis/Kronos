@@ -100,9 +100,9 @@ class CroStemmer:
         Returns:
             Stemirani korijen
         """
-        # 1. Lowercase i čišćenje
+        # 1. Lowercase i čišćenje (dopuštamo brojeve za tehničke termine)
         word = word.lower().strip()
-        word = ''.join(c for c in word if c.isalpha())
+        word = ''.join(c for c in word if c.isalnum())
         
         if not word:
             return word

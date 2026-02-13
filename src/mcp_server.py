@@ -12,6 +12,50 @@ Alati:
 
 import os
 import sys
+import builtins
+import contextlib
+import io
+from dotenv import load_dotenv
+from mcp.server.fastmcp import FastMCP
+
+# --- AGRESIVNI MCP ŠTIT (Windows / Stdio) ---
+# Spremamo originalne objekte i deskriptore
+_real_stdout = sys.stdout
+_real_stderr = sys.stderr
+_real_print = builtins.print
+_original_stdout_fd = os.dup(sys.stdout.fileno())
+
+# Definicija sigurnog printa
+def mcp_safe_print(*args, **kwargs):
+    # Uvijek šalje na stderr, bez obzira na sve
+    kwargs['file'] = _real_stderr
+    _real_print(*args, **kwargs)
+
+# Zamijenimo globalni print
+builtins.print = mcp_safe_print
+
+class OutputDetector:
+    """Šalje sve na stderr i sprječava pisanje po stdoutu."""
+    def write(self, text):
+        if text.strip():
+            _real_stderr.write(f"\n[STDOUT LEAK]: {repr(text)}\n")
+            _real_stderr.flush()
+        return len(text)
+    def flush(self):
+        _real_stderr.flush()
+    def fileno(self):
+        # Važno: fileno() mora vratiti nešto, ali mi ćemo dup2 raditi na FD razini
+        return 1 
+
+# 1. Odmah preusmjeravamo sistemski stdout FD na stderr (FD 2)
+os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+
+# 2. Python-level zaštita
+sys.stdout = OutputDetector()
+# --------------------------------------------
+
+# Učitaj varijable iz .env datoteke u kronos rootu
+load_dotenv()
 
 # Dodaj root direktorij u path za importanje modula
 # __file__ je src/mcp_server.py, pa ROOT_DIR je parent od src = kronos
@@ -20,11 +64,32 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from mcp.server.fastmcp import FastMCP
+import contextlib
 
 # Lazy load Kronos modula (izbjegavamo circular import)
 _oracle = None
 _librarian = None
 _job_manager = None
+_oracle_ready = False
+_oracle_error = None
+
+import threading
+_oracle_init_event = threading.Event()
+
+def _init_oracle_background():
+    """Pozadinska inicijalizacija Oracle-a da ne blokira MCP handshake."""
+    global _oracle, _oracle_ready, _oracle_error
+    try:
+        from src.modules.oracle import Oracle
+        _oracle = Oracle(os.path.join(ROOT_DIR, "data", "store"))
+        _oracle_ready = True
+    except Exception as e:
+        _oracle_error = str(e)
+    finally:
+        _oracle_init_event.set()
+
+# Pokreni inicijalizaciju u pozadini ODMAH
+threading.Thread(target=_init_oracle_background, daemon=True).start()
 
 def get_job_manager():
     """Dohvaća JobManager instancu."""
@@ -35,11 +100,15 @@ def get_job_manager():
     return _job_manager
 
 def get_oracle():
-    """Dohvaća Oracle instancu (lazy loading)."""
+    """Dohvaća Oracle instancu. Čeka da se pozadinska inicijalizacija završi."""
     global _oracle
+    if not _oracle_ready:
+        # Čekamo max 30 sekundi da se Oracle inicijalizira
+        _oracle_init_event.wait(timeout=30)
+    if _oracle_error:
+        raise RuntimeError(f"Oracle init failed: {_oracle_error}")
     if _oracle is None:
-        from src.modules.oracle import Oracle
-        _oracle = Oracle(os.path.join(ROOT_DIR, "data", "store"))
+        raise RuntimeError("Oracle init timeout (30s)")
     return _oracle
 
 def get_librarian():
@@ -53,6 +122,89 @@ def get_librarian():
 
 # Inicijaliziraj MCP server
 mcp = FastMCP("kronos")
+
+
+@mcp.tool()
+def kronos_ping() -> str:
+    """
+    Test da li Kronos MCP server radi.
+    
+    Returns:
+        Jednostavan 'pong' odgovor.
+    """
+    return "🏓 pong! Kronos MCP server is alive."
+
+
+@mcp.tool()
+def kronos_query(query: str, mode: str = "light") -> str:
+    """
+    Pitajte Kronos AI sustav o arhitekturi koda, specifičnim datotekama ili znanju o projektu.
+    
+    Args:
+        query: Pitanje za Kronos (npr. "Kako radi Oracle klasa?")
+        mode: Način upita: 'light' (1500 tokens), 'auto' (4000 tokens), 'extra' (8000 tokens).
+    
+    Returns:
+        Odgovor baze znanja s relevantnim kontekstom.
+    """
+    try:
+        from src.modules.context_budgeter import ContextComposer, ContextItem, BudgetConfig
+        
+        # Brza provjera - ako Oracle još nije spreman, javi korisniku
+        if not _oracle_ready:
+            remaining = 30
+            _oracle_init_event.wait(timeout=remaining)
+            if not _oracle_ready:
+                return "⏳ Kronos se još zagrijava (ChromaDB inicijalizacija). Pokušaj ponovno za 5-10 sekundi."
+        
+        oracle = get_oracle()
+        
+        # Mapiranje moda na limite i budžete
+        limit = 30
+        config = None
+        
+        if mode == "light":
+            limit = 15
+            config = BudgetConfig.from_profile("light")
+        elif mode == "extra":
+            limit = 60
+            config = BudgetConfig.from_profile("extra")
+        else: # auto / default
+            limit = 30
+            config = BudgetConfig()
+
+        # 1. Dohvat kandidata
+        retrieval_results = oracle.ask(query, limit=limit, silent=True)
+        
+        if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks')):
+            return f"Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
+            
+        # 2. Sastavljanje konteksta pomoću Budgetera
+        composer = ContextComposer(config=config)
+        
+        # Dodaj entitete
+        for e in retrieval_results.get('entities', []):
+            composer.add_item(ContextItem(
+                kind="entity",
+                content=e['content'],
+                source=e.get('metadata', {}).get('source', 'Unknown'),
+                utility_score=0.9
+            ))
+            
+        # Dodaj chunkove
+        for c in retrieval_results.get('chunks', []):
+            composer.add_item(ContextItem(
+                kind="chunk",
+                content=c['content'],
+                source=c.get('metadata', {}).get('source', 'Unknown'),
+                utility_score=c.get('score', 0.5)
+            ))
+            
+        # 3. Finalni formatirani odgovor
+        return composer.compose()
+    
+    except Exception as e:
+        return f"Greška u kronos_query: {str(e)}"
 
 
 @mcp.tool()
@@ -77,13 +229,18 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
         
         output = [f"## Rezultati pretrage: '{query}'\n"]
         
-        for i, res in enumerate(results, 1):
+        entities = results.get('entities', [])
+        chunks = results.get('chunks', [])
+        
+        all_res = entities + chunks
+        
+        for i, res in enumerate(all_res, 1):
             content = res.get('content', '')
             metadata = res.get('metadata', {})
             source = metadata.get('source', 'Nepoznato')
             proj = metadata.get('project', '-')
             score = res.get('score', 0)
-            res_type = res.get('type', 'Unknown')
+            res_type = res.get('type', 'Chunk')
             
             relevance = round(score * 100, 1) if score else 0
             
@@ -92,7 +249,7 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
             output.append(f"```\n{content[:500]}{'...' if len(content) > 500 else ''}\n```\n")
         
         return "\n".join(output)
-        
+    
     except Exception as e:
         return f"Greška pri pretrazi: {str(e)}"
 
@@ -304,8 +461,44 @@ def kronos_list_jobs(limit: int = 10) -> str:
 
 
 def main():
-    """Pokreće MCP server u stdio modu."""
-    mcp.run(transport="stdio")
+    """Pokreće MCP server u stdio modu s debugging outputom."""
+    import logging
+    
+    # Logging ide na stderr (ne smeta stdio transportu)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[MCP Server] %(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stderr)]
+    )
+    
+    mcp_logger = logging.getLogger("kronos_mcp")
+    mcp_logger.info("🚀 Kronos MCP Server starting...")
+    mcp_logger.info(f"📂 Root dir: {ROOT_DIR}")
+    
+    try:
+        # --- UKLANJAMO SELF-TEST ZBOG TIMEOUTA ---
+        # mcp_logger.info("🔍 Testing Oracle initialization...")
+        # oracle = get_oracle()
+        # mcp_logger.info("✅ Oracle ready")
+        # -----------------------------------------
+        
+        mcp_logger.info("💬 Starting MCP stdio server...")
+        
+        # --- KRITIČNA RESTAURACIJA ZA KOMUNIKACIJU ---
+        # Vraćamo sistemski FD 1 (stdout) na njegovu pravu metu
+        os.dup2(_original_stdout_fd, 1) # 1 je uvijek FD za stdout
+        
+        # Vraćamo i Python-level objekt na pravi stdout
+        sys.stdout = _real_stdout
+        
+        # Pokrećemo server (ovo blokira)
+        mcp.run(transport="stdio")
+        
+    except KeyboardInterrupt:
+        mcp_logger.info("⚠️ Server interrupted by user")
+    except Exception as e:
+        mcp_logger.error(f"❌ Fatal error: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

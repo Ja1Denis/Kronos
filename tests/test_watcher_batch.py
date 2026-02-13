@@ -38,9 +38,13 @@ class TestWatcherBatch(unittest.TestCase):
         time.sleep(2.0)
         
         # 3. Provjeri bazu (tražimo 'ingest_batch' job)
-        next_job = self.manager.get_next_job()
-        self.assertIsNotNone(next_job, "Job nije kreiran")
-        self.assertEqual(next_job["type"], "ingest_batch")
+        jobs = self.manager.list_jobs()
+        self.assertGreater(len(jobs), 0, "Nijedan job nije kreiran")
+        
+        # Nađi naš job (ingest_batch)
+        batch_jobs = [j for j in jobs if j['type'] == 'ingest_batch']
+        self.assertGreater(len(batch_jobs), 0, "Ingest batch job nije pronađen")
+        next_job = batch_jobs[0]
         
         files = next_job["params"].get("files", [])
         print(f"Pronađeno datoteka u batchu: {len(files)}")

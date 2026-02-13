@@ -59,9 +59,9 @@ def test_line_range_validation():
         valid, err = validate_line_range(5, 4, test_file)
         assert valid == False
         
-        # Empty range
+        # Single line range (start == end)
         valid, err = validate_line_range(5, 5, test_file)
-        assert valid == False
+        assert valid == True
         
         # Empty range (Start == End is allowed if it's 1 line, wait, usually end is inclusive)
         # In our case, end_line 1 to start_line 1 is 1 line.

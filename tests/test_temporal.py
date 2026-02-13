@@ -102,21 +102,18 @@ class TestLibrarianActiveDecisions:
 class TestDebounceHandler:
     """Osnovni testovi za debounce handler."""
     
-    def test_import_debounced_handler(self):
-        """Test da se DebouncedEventHandler može importirati."""
-        from src.modules.watcher import DebouncedEventHandler
-        assert DebouncedEventHandler is not None
+    def test_import_batch_handler(self):
+        """Test da se BatchJobEventHandler može importirati."""
+        from src.modules.watcher import BatchJobEventHandler
+        assert BatchJobEventHandler is not None
     
-    def test_debounce_interval_default(self):
+    def test_batch_interval_default(self):
         """Test defaultne vrijednosti debounce intervala."""
-        from src.modules.watcher import DebouncedEventHandler
-        from unittest.mock import MagicMock
+        from src.modules.watcher import BatchJobEventHandler
+        handler = BatchJobEventHandler()
         
-        mock_ingestor = MagicMock()
-        handler = DebouncedEventHandler(mock_ingestor)
-        
-        assert handler.debounce_interval == 2.0
-        assert handler.timers == {}
+        assert handler.debounce_interval == 5.0
+        assert handler.pending_files == set()
 
 
 if __name__ == "__main__":

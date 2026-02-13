@@ -10,8 +10,62 @@ from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
 from src.modules.notification_manager import notification_manager
+from src.utils.metrics import metrics
 
-app = FastAPI(title="Kronos API", description="Semantička Memorija za AI Agente", version="0.2.0")
+from contextlib import asynccontextmanager
+
+# SINGLETON WORKER
+_worker_instance = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Upravlja životnim ciklusom aplikacije (Startup & Shutdown).
+    """
+    global _worker_instance
+    import threading
+    from src.modules.watcher import Watcher
+    
+    # --- STARTUP ---
+    print("🔧 Initializing Singleton Oracle & FastPath...")
+    try:
+        # Warmup Singleton Oracle
+        get_oracle()
+    except Exception as e:
+        print(f"❌ Failed to init Oracle: {e}")
+    
+    # Start Watcher (Daemon Thread)
+    def run_watcher():
+        watcher = Watcher(path=".") # Prati cijeli projektni root
+        watcher.run()
+        
+    watcher_thread = threading.Thread(target=run_watcher, daemon=True, name="KronosWatcher")
+    watcher_thread.start()
+    print("🚀 Background Watcher pokrenut na '.' folderu.")
+
+    # Start Job Worker (Daemon Thread)
+    try:
+        from src.modules.worker import Worker
+        _worker_instance = Worker(poll_interval=2.0)
+        _worker_instance.start()
+        print("🚀 Background Job Worker pokrenut.")
+    except Exception as e:
+        print(f"❌ Failed to start Worker: {e}")
+
+    yield # Ovdje aplikacija prima zahtjeve
+
+    # --- SHUTDOWN ---
+    if _worker_instance:
+        print("🛑 Zaustavljam Worker...")
+        _worker_instance.stop()
+    print("🔌 Server shutdown complete.")
+
+app = FastAPI(
+    title="Kronos API", 
+    description="Semantička Memorija za AI Agente", 
+    version="0.2.0",
+    lifespan=lifespan
+)
 
 # Model upita
 class QueryRequest(BaseModel):
@@ -41,7 +95,13 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "ok" if metrics.health_score() > 80 else "degraded",
+        "health_score": metrics.health_score(),
+        "fts_failure_rate": metrics.fts_failures / max(metrics.total_queries, 1),
+        "vector_failure_rate": metrics.vector_failures / max(metrics.total_queries, 1),
+        "total_queries": metrics.total_queries
+    }
 
 @app.get("/stream")
 async def stream_notifications():
@@ -215,7 +275,21 @@ def query_memory(request: QueryRequest):
             except Exception as e:
                 print(f"Error fetching logs: {e}")
             
-        # 4. Add Entities & Chunks...
+        # 4. Handle Ambiguity
+        if retrieval_results.get("status") == "ambiguous":
+            return {
+                "status": "ambiguous",
+                "message": retrieval_results.get("message"),
+                "projects": retrieval_results.get("projects", []),
+                "context": "",
+                "stats": {
+                    "used_tokens": 0,
+                    "used_latency_ms": round(total_latency, 2),
+                    "search_method": method
+                }
+            }
+
+        # 5. Add Entities, Chunks and POINTERS to Composer
         for ent in retrieval_results.get("entities", []):
             composer.add_item(ContextItem(
                 content=ent["content"],
@@ -223,13 +297,23 @@ def query_memory(request: QueryRequest):
                 source=ent["metadata"].get("source", "unknown"),
                 utility_score=0.9
             ))
+
+        for p in retrieval_results.get("pointers", []):
+             # Pointers represent Project Map / Navigation
+             pointer_text = f"FILE: {p['file_path']}\nSECTION: {p['section']}\nMATCH: {', '.join(p['keywords'])}"
+             composer.add_item(ContextItem(
+                content=pointer_text,
+                source=p['file_path'],
+                kind="pointer",
+                utility_score=p.get('confidence', 0.1)
+             ))
             
         for chunk in retrieval_results.get("chunks", []):
             composer.add_item(ContextItem(
                 content=chunk["content"],
                 kind="chunk",
                 source=chunk["metadata"].get("source", "unknown"),
-                utility_score=chunk.get("score", 0.5)
+                utility_score=chunk.get("utility_score", chunk.get("score", 0.5))
             ))
             
         # 6. Compose Final Context
@@ -237,6 +321,7 @@ def query_memory(request: QueryRequest):
         audit_log = composer.get_audit_report()
         
         return {
+            "status": "success",
             "query": request.text,
             "context": final_context,
             "type": retrieval_results.get("type", "unknown"),
@@ -535,49 +620,8 @@ def cancel_job(job_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-from src.modules.worker import Worker
 
-# Global Worker Instance
-_worker_instance = None
-
-@app.on_event("startup")
-def startup_event():
-    """Pokreće pozadinske servise (Watcher, Worker)."""
-    global _worker_instance
-    import threading
-    from src.modules.watcher import Watcher
-    
-    # 1. Warmup Singleton Oracle
-    try:
-        get_oracle()
-    except Exception as e:
-        print(f"❌ Failed to init Oracle: {e}")
-    
-    # 2. Start Watcher (Daemon Thread)
-    def run_watcher():
-        watcher = Watcher(path=".") # Prati cijeli projektni root
-        watcher.run()
-        
-    watcher_thread = threading.Thread(target=run_watcher, daemon=True, name="KronosWatcher")
-    watcher_thread.start()
-    print("🚀 Background Watcher pokrenut na '.' folderu.")
-
-    # 3. Start Job Worker (Daemon Thread)
-    # Worker runs in its own thread loop and handles jobs from SQLite queue
-    try:
-        _worker_instance = Worker(poll_interval=2.0)
-        _worker_instance.start()
-        print("🚀 Background Job Worker pokrenut.")
-    except Exception as e:
-        print(f"❌ Failed to start Worker: {e}")
-
-@app.on_event("shutdown")
-def shutdown_event():
-    """Graceful shutdown za servise."""
-    global _worker_instance
-    if _worker_instance:
-        print("🛑 Zaustavljam Worker...")
-        _worker_instance.stop()
+# ==================== HELPER FUNKCIJE ====================
 
 def kill_port_8000():
     """Kill any process using port 8000 (Windows) balance)."""

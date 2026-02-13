@@ -1,5 +1,27 @@
 # Development Log - Kronos
 
+### [2026-02-13] Faza 12: MCP Stability & Windows Integration (v0.3.0-mcp-stable) - COMPLETED 🛡️
+- **Cilj:** Rješavanje kritičnih problema s MCP komunikacijom na Windowsima i sprječavanje timeouta pri inicijalizaciji.
+- **Status:** ✅ v0.3.0 Released & Tagged
+- **Ključne promjene:**
+    - **Agresivni stdout štit:** Implementirana OS-level `os.dup2` redirekcija koja nasilno preusmjerava sistemski FD 1 (stdout) na FD 2 (stderr). Ovo sprječava C/Rust biblioteke (poput ChromaDB) da zagađuju JSON-RPC kanal nasumičnim ispisima.
+    - **Lazy Background Initialization:** Oracle, Librarian i ChromaDB inicijalizacija je prebačena u pozadinski thread. MCP handshake sada prolazi trenutno, sprečavajući "EOF while reading" i timeout greške u IDE-u.
+    - **ContextItem robustnost:** Dodano `metadata` polje u `ContextItem` dataclass. Riješen `TypeError` koji je nastajao pri obradi rezultata iz Oraclea.
+    - **Safe Print (Monkey-patching):** Globalni `print` zamijenjen sigurnim wrapperom koji uvijek koristi `stderr`, sprječavajući rekurzivne greške pri logiranju izuzetaka.
+    - **Cleanup:** Maknuti suvišni `redirect_stdout` wrapperi iz alata, čime je kôd očišćen i ubrzan.
+
+### [2026-02-13] Faza 11: System Robustness & Testing (v2.2.0-robust) - COMPLETED 🛡️
+- **Cilj:** Implementacija zaštitnih slojeva protiv nevaljanih upita, retry logike za stabilnost API-ja i pune testne pokrivenosti.
+- **Status:** ✅ v2.2.0-robust Released
+- **Ključne promjene:**
+    - **FTS Search Robustness (Librarian):** Implementirana `_escape_fts_token` metoda koja sanitizira upite. Riješen problem s `sqlite3.OperationalError` kod pretrage koda koji sadrži zagrade, navodnike i crtice.
+    - **Hibridni Pretraživač:** Dodan `AND` -> `OR` fallback mehanizam u FTS pretragu. Ako striktan `AND` podudaranje ne vrati rezultate, sustav automatski pokušava širi `OR` upit.
+    - **Retry Logic (Tenacity):** Implementiran `resilient_vector_query` wrapper oko ChromaDB poziva. Svi vektorski upiti sada imaju 3 pokušaja s `exponential backoff` (1s-5s) za otpornost na asinkrone database lockove.
+    - **System Metrics:** Uvedena `SystemMetrics` klasa za praćenje performansi i stabilnosti u realnom vremenu. Prati se: `health_score`, `fts_failure_rate`, `vector_failure_rate` i ukupni volumen upita.
+    - **API Monitoring:** Ažuriran `/health` endpoint u `server.py` koji sada vraća detaljan status sustava.
+    - **Test Coverage:** Kreiran `tests/` paket s Unit testovima za sanitizaciju, Integration testovima za API i Load testovima za provjeru skalabilnosti.
+    - **Automation:** Razvijen `run_all_tests.ps1` za brzu validaciju cijelog sustava jednim klikom.
+
 ### [2026-02-12] Faza 10: Pointer System (v2.3.0-gold-pointer) - COMPLETED ✅
 - **Cilj:** Implementacija inteligentnog "Just-in-Time" dohvaćanja konteksta i stabilizacija masovne ingestije.
 - **Status:** ✅ v2.3.0 Released & Merged to Master

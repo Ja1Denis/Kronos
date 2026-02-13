@@ -17,3 +17,4 @@ pytest
 httpx
 # google-generativeai (Deprecated)
 google-genai
+tenacity

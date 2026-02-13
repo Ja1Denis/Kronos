@@ -60,6 +60,7 @@ Bazirano na **Gemini 1.5 Flash-8B** cijenama ($0.14/1M tokena):
 
 - ⚡ **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga pojmova implementirana u Rustu (**< 1ms**).
 - 🔍 **Hibridna Pretraga**: Kombinacija vektorske pretrage (ChromaDB) i precizne FTS5 pretrage (SQLite).
+- 🛡️ **MCP IDE Integration**: Stabilna stdio komunikacija za Windows (Antigravity/Gemini klijenti) s nultom tolerancijom na stdout zagađenje.
 - ⚖️ **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`).
 - 📂 **Project Awareness**: Automatska izolacija znanja po projektima.
 - 🛠️ **Smart Fetching**: AI samostalno zahtijeva točne linije koda tek kada su mu potrebne.

@@ -32,11 +32,19 @@ def test_env(tmp_path):
 def test_watcher_detect_file(test_env):
     watch_dir, data_dir, ingestor = test_env
     
-    from src.modules.watcher import DebouncedEventHandler
+    from src.modules.watcher import BatchJobEventHandler
+    from src.modules.job_manager import JobManager
     from watchdog.observers import Observer
+    import uuid
     
-    # Koristimo kraći debounce interval za testove
-    handler = DebouncedEventHandler(ingestor, debounce_interval=0.5)
+    # Koristimo kraći debounce interval za testove i testnu bazu za jobove
+    test_jobs_db = os.path.join(data_dir, "test_jobs.db")
+    job_manager = JobManager(db_path=test_jobs_db)
+    
+    handler = BatchJobEventHandler(debounce_interval=0.5)
+    # Monkey-patch job manager za test
+    handler.job_manager = job_manager
+    
     observer = Observer()
     observer.schedule(handler, watch_dir, recursive=False)
     observer.start()
@@ -48,17 +56,12 @@ def test_watcher_detect_file(test_env):
             f.write("# Test Title\nThis is a test content.")
             
         # Give some time for watcher and processing (debounce + processing)
-        time.sleep(3)
+        time.sleep(2)
         
-        # Check if indexed in SQLite FTS
-        db_path = os.path.join(data_dir, "metadata.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT count(*) FROM knowledge_fts WHERE content LIKE '%Test Title%'")
-        count = cursor.fetchone()[0]
-        conn.close()
-        
-        assert count > 0
+        # Provjeri je li kreiran job u testnoj bazi
+        jobs = job_manager.list_jobs()
+        assert len(jobs) > 0
+        assert jobs[0]['type'] == 'ingest_batch'
         
     finally:
         observer.stop()

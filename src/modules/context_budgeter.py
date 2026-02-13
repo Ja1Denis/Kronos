@@ -56,6 +56,7 @@ class ContextItem:
     utility_score: float = 0.5
     token_cost: int = 0
     dedup_key: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.token_cost:
