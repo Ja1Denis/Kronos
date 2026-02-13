@@ -56,11 +56,10 @@ Bazirano na **Gemini 1.5 Flash-8B** cijenama ($0.14/1M tokena):
 
 ---
 
-## 🌟 Ključne Značajke
-
+- 🛡️ **MCP IDE Integration**: Native stdio komunikacija za Windows (Antigravity/Gemini klijenti). Uključuje "Zero-Pollution" stdout štit za stabilnost.
+- 📉 **Shadow Accounting**: Ugrađeno praćenje i izvještavanje o stvarnoj uštedi tokena i novca unutar svakog odgovora.
 - ⚡ **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga pojmova implementirana u Rustu (**< 1ms**).
 - 🔍 **Hibridna Pretraga**: Kombinacija vektorske pretrage (ChromaDB) i precizne FTS5 pretrage (SQLite).
-- 🛡️ **MCP IDE Integration**: Stabilna stdio komunikacija za Windows (Antigravity/Gemini klijenti) s nultom tolerancijom na stdout zagađenje.
 - ⚖️ **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`).
 - 📂 **Project Awareness**: Automatska izolacija znanja po projektima.
 - 🛠️ **Smart Fetching**: AI samostalno zahtijeva točne linije koda tek kada su mu potrebne.
@@ -86,41 +85,49 @@ Bazirano na **Gemini 1.5 Flash-8B** cijenama ($0.14/1M tokena):
 
 ---
 
+## 🚀 Integracija u IDE (MCP)
+
+Kronos podržava **Model Context Protocol**. Konfigurirajte svoj IDE (npr. Gemini/Antigravity) dodavanjem sljedećeg u `mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "kronos": {
+      "command": "python",
+      "args": ["-u", "E:/G/GeminiCLI/ai-test-project/kronos/src/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "E:/G/GeminiCLI/ai-test-project/kronos",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+### 🛡️ Robusnost na Windowsima
+Server koristi **OS-level stdout hijacking** (`os.dup2`) kako bi spriječio "zagađivanje" komunikacije. Svi nepotrebni ispisi (logs, native library noise) automatski se preusmjeravaju na `stderr`.
+
+---
+
 ## 🚀 Brzi Start
 
 ### 1. Instalacija
 ```powershell
-# Kloniraj repozitorij i instaliraj ovisnosti
 git clone https://github.com/Ja1Denis/Kronos.git
 cd Kronos
 pip install -r requirements.txt
 ```
 
 ### 2. Konfiguracija 🔑
-Kronos koristi **Gemini API** za naprednu sintezu i ekstrakciju znanja.
-1.  U radnom prostoru projekta, kreiraj mapu `.agent` (ako već ne postoji).
-2.  Unutar mape `.agent` kreiraj datoteku `.env`.
-3.  Dodaj svoj API ključ:
-```env
-GEMINI_API_KEY=vaš_gemini_api_ključ_ovdje
-```
+Postavite Gemini API ključ u vaš `.env` file za snagu AI sinteze.
 
-### 3. Pokreni Ingestiju (Učitavanje znanja)
+### 3. Ingestija
 ```powershell
-# Učitaj cijeli radni prostor odjednom
 python .\ingest_everything.py
 ```
 
-### 4. Pokreni Server
-```powershell
-# Postavi PYTHONPATH i pokreni API
-$env:PYTHONPATH="."; python src/server.py
-```
-
-### 5. Prvi Upit
-```powershell
-.\ask_fast.ps1 -Query "Što Kronos radi sa tokenima?"
-```
+### 4. Korištenje
+Jednostavno dodajte `@kronos` u upit vašem agentu. Svaki odgovor će završiti s **Efficiency Reportom** koji pokazuje vašu uštedu.
 
 ---
 

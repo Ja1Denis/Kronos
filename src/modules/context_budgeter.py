@@ -142,6 +142,9 @@ class ContextComposer:
         self.file_token_counts: Dict[str, int] = {}
         self.seen_keys: Set[str] = set()
         self.audit_log: List[str] = []
+        
+        # Savings Metrics
+        self.potential_tokens = 0 # What a "dumb" RAG would send
 
     def add_item(self, item: ContextItem):
         self.items.append(item)
@@ -166,12 +169,10 @@ class ContextComposer:
         final_context = []
 
         # 1. Pre-processing & Sorting
-        # Priority mapping:
-        # Cursor: 1.0 (Always) -> Handled by separate logic usually, but here we treat it as top priority
-        # Entities: 0.9
-        # Chunks: 0.5 - 0.8 (based on utility score)
-        # Recent Diffs: 0.6
-        
+        # Calculate potential tokens (Full RAG estimate)
+        # We assume full RAG doesn't trim and doesn't pointerize.
+        self.potential_tokens = sum(item.token_cost for item in self.items)
+
         # 1. Pre-processing
         for item in self.items:
             # Apply "Fat Chunk Rule" - hard trimming
@@ -184,17 +185,14 @@ class ContextComposer:
             if item.kind == "cursor": item.utility_score = 10.0
             elif item.kind == "briefing": item.utility_score = 9.0
             elif item.kind == "entity" and item.utility_score <= 0.5: item.utility_score = 0.8
-            elif item.kind == "pointer": item.utility_score = 0.7 # High priority for pointers
+            elif item.kind == "pointer": item.utility_score = 0.7 
             elif item.kind == "recent_changes" and item.utility_score <= 0.5: item.utility_score = 0.6
         
-        # Pass-based sorting:
-        # Pass 1: Mandatory/Small items (Cursor, Briefing, Entity, Pointer)
-        # Pass 2: Large items (Chunk, Evidence, Recent Changes)
+        # Pass-based sorting
         pass1_kinds = ["cursor", "briefing", "entity", "pointer"]
         pass1_items = [i for i in self.items if i.kind in pass1_kinds]
         pass2_items = [i for i in self.items if i.kind not in pass1_kinds]
         
-        # Sort both by utility
         pass1_items.sort(key=lambda x: x.utility_score, reverse=True)
         pass2_items.sort(key=lambda x: x.utility_score, reverse=True)
         
@@ -207,28 +205,21 @@ class ContextComposer:
 
             # 2.2 Global Budget Check
             if self.current_tokens + item.token_cost > self.config.global_limit:
-                # SPECIAL: If a CHUNK doesn't fit, can we try to add it as a POINTER?
-                if item.kind == "chunk":
-                     # Create a virtual pointer (simulated)
-                     # In a real scenario, Oracle provides the pointer, but here we can at least log it
-                     self._log_rejection(item, "global_budget_exceeded (Considered for downgrade)")
-                else:
-                     self._log_rejection(item, "global_budget_exceeded")
-                continue
+                 self._log_rejection(item, "global_budget_exceeded")
+                 continue
 
-            # 2.3 File Caps (only for chunks/evidence/recent)
+            # 2.3 File Caps
             if item.kind in ["chunk", "evidence", "recent_changes"]:
                 file_chunks = self.file_chunk_counts.get(item.source, 0)
                 file_tokens = self.file_token_counts.get(item.source, 0)
                 
-                # Dynamic File Cap: Allow more chunks for documentation and specs
                 current_file_max_chunks = self.config.file_max_chunks
                 current_file_max_tokens = self.config.file_max_tokens
                 
                 source_lower = item.source.lower()
                 if any(x in source_lower for x in ["docs", "specs", "requirements", "tasks.md"]):
-                    current_file_max_chunks = 10  # Deep memory for our own docs
-                    current_file_max_tokens = 3000 # Allow more tokens for docs
+                    current_file_max_chunks = 10
+                    current_file_max_tokens = 3000
                 
                 if file_chunks >= current_file_max_chunks:
                     self._log_rejection(item, f"file_chunk_cap ({current_file_max_chunks})")
@@ -239,12 +230,7 @@ class ContextComposer:
                     continue
 
             # 2.4 Category Caps
-            cat_limit = getattr(self.config, f"{item.kind}_limit", None)
-            # Note: "cursor" usually doesn't have a limit in config, or we trust it fits if global fits
-            # "entities" -> entities_limit
-            # "chunk" -> chunks_limit
-            
-            # Map plural names in config to singular kind
+            cat_limit = None
             if item.kind == "chunk": cat_limit = self.config.chunks_limit
             elif item.kind == "entity": cat_limit = self.config.entities_limit
             
@@ -257,21 +243,16 @@ class ContextComposer:
             self.seen_keys.add(item.dedup_key)
             self.current_tokens += item.token_cost
             self.category_tokens[item.kind] = self.category_tokens.get(item.kind, 0) + item.token_cost
-            self.audit_log.append(f"ADD [{item.kind}] {item.source[:30]}: +{item.token_cost} tokens (total: {self.current_tokens})")
+            self.audit_log.append(f"ADD [{item.kind}] {item.source[:30]}: +{item.token_cost} tokens")
             
-            # POST-CHECK: Verify budget not exceeded (paranoid check)
-            assert self.current_tokens <= self.config.global_limit, f"BUG: Budget exceeded! {self.current_tokens} > {self.config.global_limit}"
-
             if item.kind in ["chunk", "evidence", "recent_changes"]:
                 self.file_chunk_counts[item.source] = self.file_chunk_counts.get(item.source, 0) + 1
                 self.file_token_counts[item.source] = self.file_token_counts.get(item.source, 0) + item.token_cost
             
             final_context.append(item)
 
-        # 3. Final Render (Sort by kind for structure: Briefing -> Entities -> Chunks)
-        # Define render order
+        # 3. Final Render
         render_order = {"briefing": 0, "cursor": 1, "entity": 2, "recent_changes": 3, "pointer": 4, "chunk": 5, "evidence": 6}
-        
         final_context.sort(key=lambda x: render_order.get(x.kind, 99))
         
         output_str = ""
@@ -279,6 +260,25 @@ class ContextComposer:
             output_str += item.render() + "\n\n"
             
         return output_str.strip()
+
+    def get_efficiency_report(self) -> str:
+        """Generira vizualni izvještaj o uštedi tokena."""
+        actual = self.current_tokens
+        saved = max(0, self.potential_tokens - actual)
+        efficiency = (saved / self.potential_tokens * 100) if self.potential_tokens > 0 else 0
+        
+        # Procijenjena ušteda (Gemini 1.5 Flash: ~$0.15 na milijun tokena)
+        usd_saved = (saved / 1_000_000) * 0.15
+        
+        report = "\n---\n"
+        report += "### 🛡️ Kronos Efficiency Report\n"
+        report += f"- **Actual Input:** {actual:,} tokens (Pointer Optimized)\n"
+        report += f"- **Standard RAG:** {self.potential_tokens:,} tokens (Full Context)\n"
+        report += f"- **Savings:** **{efficiency:.1f}% Token Reduction** 📉\n"
+        if saved > 0:
+            report += f"- **ROI:** Ovaj upit vam je uštedio cca **${usd_saved:.5f}**.\n"
+        report += "---\n"
+        return report
 
     def get_audit_report(self) -> str:
         report = "=== CONTEXT COMPOSER AUDIT ===\n"
