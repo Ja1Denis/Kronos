@@ -94,15 +94,17 @@ Kronos podržava **Model Context Protocol**. Konfigurirajte svoj IDE (npr. Gemin
   "mcpServers": {
     "kronos": {
       "command": "python",
-      "args": ["-u", "E:/G/GeminiCLI/ai-test-project/kronos/src/mcp_server.py"],
+      "args": ["-u", "C:/PUTANJA/DO/KRONOS/src/mcp_server.py"],
       "env": {
-        "PYTHONPATH": "E:/G/GeminiCLI/ai-test-project/kronos",
+        "PYTHONPATH": "C:/PUTANJA/DO/KRONOS",
         "PYTHONUNBUFFERED": "1"
       }
     }
   }
 }
 ```
+
+> **Napomena:** Obavezno zamijenite `C:/PUTANJA/DO/KRONOS` sa stvarnom putanjom do foldera gdje ste klonirali projekt na vašem računalu.
 
 ### 🛡️ Robusnost na Windowsima
 Server koristi **OS-level stdout hijacking** (`os.dup2`) kako bi spriječio "zagađivanje" komunikacije. Svi nepotrebni ispisi (logs, native library noise) automatski se preusmjeravaju na `stderr`.
