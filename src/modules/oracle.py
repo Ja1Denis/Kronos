@@ -50,7 +50,19 @@ class Oracle:
         else:
             self.embedding_function = None
 
-        self.client = chromadb.PersistentClient(path=db_path)
+        # ChromaDB može biti zaključan na Windowsima, pa koristimo retry
+        import time
+        self.client = None
+        for attempt in range(3):
+            try:
+                self.client = chromadb.PersistentClient(path=db_path)
+                break
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(2)
+                else:
+                    raise e
+
         self.collection = self.client.get_or_create_collection(
             name="kronos_memory",
             embedding_function=self.embedding_function

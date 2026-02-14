@@ -1,39 +1,56 @@
-# start_kronos.ps1
+# ============================================================
+# Kronos MCP Server - Multi-Agent Launcher
+# ============================================================
+# Pokreće Kronos u SSE (HTTP) modu na portu 8765.
+# Svi IDE prozori (VS Code, Cursor, Claude Desktop) 
+# se spajaju na isti server.
+#
+# Korištenje:
+#   .\start_kronos.ps1              # Default port 8765
+#   .\start_kronos.ps1 -Port 9000   # Custom port
+# ============================================================
 
-Write-Host "--- Pokrecem Kronos sustav u pozadini... ---" -ForegroundColor Cyan
+param(
+    [int]$Port = 8765
+)
 
-# 1. Pokreni server u novom prozoru (minimizirano)
-Start-Process powershell -ArgumentList "-NoExit", "-Command", ".\run.ps1 serve" -WindowStyle Minimized
+$KronosRoot = $PSScriptRoot
 
-Write-Host "Ucitavam AI modele (ovo traje ~15 sekundi samo prvi put)..." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  =====================================" -ForegroundColor Magenta
+Write-Host "   Kronos MCP Server (Multi-Agent)" -ForegroundColor White
+Write-Host "  =====================================" -ForegroundColor Magenta
+Write-Host ""
+Write-Host "  Port:      $Port" -ForegroundColor Cyan
+Write-Host "  Endpoint:  http://localhost:$Port/sse" -ForegroundColor Green
+Write-Host "  Root:      $KronosRoot" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  MCP Config za IDE:" -ForegroundColor Yellow
+Write-Host '  {' -ForegroundColor DarkGray
+Write-Host '    "mcpServers": {' -ForegroundColor DarkGray
+Write-Host '      "kronos": {' -ForegroundColor DarkGray
+Write-Host "        `"url`": `"http://localhost:$Port/sse`"" -ForegroundColor Green
+Write-Host '      }' -ForegroundColor DarkGray
+Write-Host '    }' -ForegroundColor DarkGray
+Write-Host '  }' -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  Ctrl+C za zaustavljanje" -ForegroundColor DarkGray
+Write-Host "  =====================================" -ForegroundColor Magenta
+Write-Host ""
 
-# 2. Cekaj dok server ne postane 'Healthy'
-$maxRetries = 60
-$retryCount = 0
-$serverReady = $false
-$StartTime = [System.Diagnostics.Stopwatch]::StartNew()
-$Spinner = @('|', '/', '-', '\')
-
-while (-not $serverReady -and $retryCount -lt $maxRetries) {
-    try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -Method Get -ErrorAction Stop
-        if ($health.status -eq "healthy") {
-            $serverReady = $true
-        }
-    }
-    catch {
-        $Elapsed = [math]::Round($StartTime.Elapsed.TotalSeconds, 1)
-        Write-Host -NoNewline "`rUcitavam AI modele... $($Spinner[$retryCount % 4]) [$($Elapsed)s] " -ForegroundColor Yellow
-        $retryCount++
-        Start-Sleep -Milliseconds 500
-    }
+# Kill any existing Kronos on same port
+$existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
+    Select-Object -ExpandProperty OwningProcess -Unique
+if ($existingProcess) {
+    Write-Host "  Zaustavljam prethodni proces na portu $Port..." -ForegroundColor Yellow
+    $existingProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
 }
 
-if ($serverReady) {
-    Write-Host "`n`n--- Kronos je SPREMAN! ---" -ForegroundColor Green
-    Write-Host "Sada mozes koristiti: " -NoNewline
-    Write-Host ".\ask_fast.ps1 -Query '...'" -ForegroundColor White -BackgroundColor DarkBlue
-}
-else {
-    Write-Host "`n`nERROR: Server se nije pokrenuo na vrijeme. Provjeri terminal za greske." -ForegroundColor Red
-}
+# Set environment
+$env:PYTHONPATH = $KronosRoot
+$env:KRONOS_PORT = $Port
+
+# Start server
+Set-Location $KronosRoot
+python -m src.mcp_server --sse --port $Port

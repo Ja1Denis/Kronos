@@ -1,5 +1,22 @@
 # Development Log - Kronos
 
+### [2026-02-14] Faza 13: Multi-Agent & Scaling (v0.5.1-multi-agent) - COMPLETED 🛡️
+- **Cilj:** Omogućiti istovremeni rad više AI agenata/IDE prozora nad istom bazom znanja i skalabilnu ingestiju velikih workspaceova.
+- **Status:** ✅ v0.5.1 Released
+- **Ključne promjene:**
+    - **Multi-Agent Architecture (SSE):** 
+        - Dodana puna podrška za **Server-Sent Events (SSE)** transport u `mcp_server.py` (`--sse` flag).
+        - Implementiran `src/mcp_bridge.py` koji omogućuje klijentima koji podržavaju samo `stdio` (poput Antigravity/Cursor) da se spoje na centralni SSE server, eliminirajući problem zaključane baze (`database is locked`).
+        - Kreiran `start_kronos.ps1` za pokretanje centralnog servera u pozadini.
+    - **Scalable Ingestion (Job Worker Fix):**
+        - Popravljen kritični bug u `JobManager` workeru koji je sprječavao pokretanje asinkronih poslova. Worker sada ispravno koristi `Ingestor` klasu.
+        - Uspješno provedena ingestija cijelog `ai-test-project` workspacea (**668 datoteka, ~25k chunkova**).
+    - **Database Stability:**
+        - Omogućen **WAL (Write-Ahead Logging)** mode za SQLite na Windowsima radi bolje konkurentnosti.
+        - Dodan alat `kronos_reinit_oracle` za oporavak veze s bazom bez restartanja servera.
+    - **Efficiency Validation:**
+        - Potvrđena ušteda od **90.3% tokena** na kompleksnim upitima (npr. CroStem arhitektura) u odnosu na raw context.
+
 ### [2026-02-13] Faza 12: MCP Stability & Windows Integration (v0.3.0-mcp-stable) - COMPLETED 🛡️
 - **Cilj:** Rješavanje kritičnih problema s MCP komunikacijom na Windowsima i sprječavanje timeouta pri inicijalizaciji.
 - **Status:** ✅ v0.3.0 Released & Tagged

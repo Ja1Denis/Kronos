@@ -27,6 +27,15 @@ class Librarian:
         # Inicijalizacija
         self._init_sqlite()
         
+    def _get_sqlite_conn(self):
+        """Vraća SQLite konekciju s WAL modom i timeoutom."""
+        conn = sqlite3.connect(self.meta_path, timeout=30)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except:
+            pass
+        return conn
+        
         # Učitaj varijable za Gemini embeddings
         from dotenv import load_dotenv
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -99,7 +108,7 @@ class Librarian:
 
     def _init_sqlite(self):
         """Kreira tablice za praćenje datoteka i FTS pretragu."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         # 1. Tabela za praćenje promjena datoteka
@@ -176,7 +185,7 @@ class Librarian:
 
     def search_entities(self, query, etype=None, project=None, limit=5):
         """Pretražuje ekstrahirane entitete po sadržaju."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         sql = "SELECT id, file_path, project, type, content, created_at FROM entities WHERE content LIKE ?"
@@ -235,7 +244,7 @@ class Librarian:
           - "and": all tokens must be present in any order (default)
           - "or": any token can be present
         """
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         tokens = [self._escape_fts_token(t) for t in query_stemmed.split() if t.strip()]
@@ -287,7 +296,7 @@ class Librarian:
 
     def store_fts(self, path, content, stemmed_content, project=None, start_line=1, end_line=1):
         """Sprema chunk u FTS indeks."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         try:
@@ -303,7 +312,7 @@ class Librarian:
 
     def delete_fts(self, path):
         """Briše sve FTS unose za danu datoteku."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         try:
             cursor.execute('DELETE FROM knowledge_fts WHERE path = ?', (path,))
@@ -314,7 +323,7 @@ class Librarian:
 
     def store_extracted_data(self, file_path, data, project=None):
         """Sprema ekstrahirane podatke u entities tablicu."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         try:
@@ -381,7 +390,7 @@ class Librarian:
 
     def save_entity(self, etype, content, project=None):
         """Ručno sprema entitet u bazu."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         # 0. Provjera duplikata
@@ -425,7 +434,7 @@ class Librarian:
             
         current_mtime = os.path.getmtime(file_path)
         
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         cursor.execute('SELECT last_modified FROM files WHERE path = ?', (file_path,))
         row = cursor.fetchone()
@@ -439,7 +448,7 @@ class Librarian:
         """Zabilježi da je datoteka obrađena."""
         current_mtime = os.path.getmtime(file_path)
         
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT OR REPLACE INTO files (path, project, last_modified, processed_at)
@@ -477,7 +486,7 @@ class Librarian:
 
     def get_project_stats(self):
         """Dohvaća statistiku po projektima."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         projects = {}
@@ -509,7 +518,7 @@ class Librarian:
 
     def get_stats(self):
         """Dohvaća statistiku baze podataka."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         stats = {}
@@ -551,7 +560,7 @@ class Librarian:
         Dohvaća nasumične chunkove iz baze (za analizu tema).
         """
         try:
-            with sqlite3.connect(self.meta_path) as conn:
+            with self._get_sqlite_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT content FROM knowledge_fts ORDER BY RANDOM() LIMIT ?", (limit,))
                 return [row[0] for row in cursor.fetchall()]
@@ -562,7 +571,7 @@ class Librarian:
     def wipe_all(self, keep_archive=False):
         """Briše sve lokalne podatke."""
         # 1. Obriši SQLite podatke
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         try:
             cursor.execute("DELETE FROM files")
@@ -598,7 +607,7 @@ class Librarian:
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
 
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
 
         query = '''
@@ -639,7 +648,7 @@ class Librarian:
             project: Opcionalno filtriranje po projektu
             include_superseded: Ako True, uključuje i zamijenjene odluke
         """
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
 
         query = '''
@@ -678,7 +687,7 @@ class Librarian:
 
     def get_decision_by_id(self, decision_id):
         """Vraća određenu odluku po ID-u."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
 
         cursor.execute('''
@@ -706,7 +715,7 @@ class Librarian:
 
     def get_decision_history(self, decision_id):
         """Dohvaća cijeli lanac promjena za jednu odluku (unatrag i unaprijed)."""
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
         
         # 1. Nađi korijensku odluku (prvu u lancu) ili idi ciklički
@@ -748,18 +757,9 @@ class Librarian:
 
     def ratify_decision(self, decision_id, valid_from=None, valid_to=None, superseded_by=None):
         """
-        Ratificira odluku - ažurira njene temporalne parametre.
-        
-        Args:
-            decision_id: ID odluke za ažuriranje
-            valid_from: Datum od kada odluka vrijedi (YYYY-MM-DD)
-            valid_to: Datum do kada odluka vrijedi (YYYY-MM-DD)
-            superseded_by: Tekst ili ID odluke koja zamjenjuje ovu
-        
-        Returns:
-            True ako je ažuriranje uspjelo, False inače
+        Ratificira odluke - ažurira njene temporalne parametre.
         """
-        conn = sqlite3.connect(self.meta_path)
+        conn = self._get_sqlite_conn()
         cursor = conn.cursor()
 
         # Prvo provjeri postoji li odluka

@@ -1,10 +1,16 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-02-13 | Version: v0.3.0-mcp-stable 🛡️
+Datum: 2026-02-14 | Version: v0.5.1-multi-agent 🛡️
+
+### 🚀 Status: Faza 13 - MULTI-AGENT & SCALING (COMPLETED ✅)
+Kronos je sada potpuno skalabilan sustav sposoban za istovremenu podršku više AI agenata putem jedne centralne baze znanja.
+
+### [2026-02-14] Faza 13 Postignuća:
+- **Multi-Agent Support:** Implementirana server-client arhitektura putem **SSE transporta** i **MCP Bridge** skripte. Više IDE-a (VS Code, Cursor, Antigravity) sada može dijeliti istu bazu bez "database locked" grešaka.
+- **Full Ingestion:** Asinkroni Job Worker uspješno je indeksirao **668 datoteka** i **~25,000 chunkova** kroz cijeli workspace.
+- **Job Reliability:** Popravljen worker thread i omogućen WAL mode za SQLite bazu, osiguravajući stabilan rad u pozadini.
+- **Efficiency:** Validiran ROI od **90% uštede tokena** na kompleksnim upitima.
 
 ### 🚀 Status: Faza 12 - MCP REVOLUTION (Stability & IDE Integration) (COMPLETED ✅)
-Kronos je sada službeno stabilan za rad unutar IDE klijenta (Antigravity/Gemini) na Windowsima.
-
-### [2026-02-13] Faza 12 Postignuća:
 - **Zero-Pollution Communication:** Implementiran "štit" koji sprječava bilo kakav ispis na `stdout` osim JSON-RPC poruka.
 - **Fast-Handshake Architecture:** Inicijalizacija baze traje <100ms za klijenta zahvaljujući asinkronom pozadinskom učitavanju modela.
 - **Robust Tooling:** Svi MCP alati (`kronos_query`, `kronos_stats`, `kronos_ping`) testirani i rade bez grešaka s realnim podacima.

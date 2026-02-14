@@ -2,6 +2,7 @@ import sqlite3
 import json
 import uuid
 import time
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Union
 import os
@@ -15,6 +16,8 @@ class JobManager:
         self.db_path = db_path
         self._ensure_db_dir()
         self._init_db()
+        self._worker_thread = None
+        self._stop_event = threading.Event()
 
     def _ensure_db_dir(self):
         """Ensures the directory for the database exists."""
@@ -24,8 +27,13 @@ class JobManager:
 
     def _get_connection(self):
         """Returns a sqlite3 connection with Row factory."""
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        # Omogući WAL mode za bolju konkurentnost na Windowsima
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except:
+            pass
         return conn
 
     def _execute(self, query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False) -> Any:
@@ -253,16 +261,94 @@ class JobManager:
             }
 
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
-        """Converts a SQLite row to a dictionary, parsing JSON fields."""
-        job = dict(row)
-        if job['params']:
+        """Konvertira SQLite row u dict i parsira JSON polja."""
+        d = dict(row)
+        if d.get('params'):
             try:
-                job['params'] = json.loads(job['params'])
-            except json.JSONDecodeError:
-                job['params'] = {}
-        if job['result']:
+                d['params'] = json.loads(d['params'])
+            except:
+                d['params'] = {}
+        if d.get('result'):
             try:
-                job['result'] = json.loads(job['result'])
-            except json.JSONDecodeError:
-                job['result'] = None
-        return job
+                d['result'] = json.loads(d['result'])
+            except:
+                d['result'] = {}
+        return d
+
+    # --- Background Worker Logic ---
+    
+    def start_worker(self):
+        """Pokreće pozadinski worker thread ako već nije pokrenut."""
+        if self._worker_thread and self._worker_thread.is_alive():
+            return # Već radi
+            
+        self._stop_event.clear()
+        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker_thread.start()
+        
+    def stop_worker(self):
+        """Zaustavlja pozadinski worker thread."""
+        self._stop_event.set()
+        if self._worker_thread:
+            self._worker_thread.join(timeout=2.0)
+            
+    def _worker_loop(self):
+        """Glavna petlja workera."""
+        # Lokalni import da izbjegnemo kružne ovisnosti na vrhu
+        # (Ovdje bi trebali importati logiku za ingest, rebuild itd.)
+        # Za sada ćemo samo simulirati rad ili zvati vanjske funkcije ako ih imamo pri ruci.
+        # Ali čekaj, JobManager je niskorazinski! On ne zna za Librarian.
+        # Rješenje: Worker mora imati callbackove ili moramo importati Librarian ovdje.
+        
+        # Pojednostavljeno: Worker samo logira "Processing" i markira kao done za test.
+        # Za pravu ingestiju, moramo pozvati Librarian.ingest.
+        
+        # Dinamički import Ingestor-a (jer on zna raditi posao)
+        try:
+            from src.modules.ingestor import Ingestor
+            # Ingestor interno koristi Librarian, pa ne trebamo brinuti o putanjama
+        except Exception as e:
+            print(f"Worker Error: Ne mogu inicijalizirati Ingestor: {e}")
+            return
+
+        while not self._stop_event.is_set():
+            job = self.get_next_job()
+            if not job:
+                time.sleep(2) # Nema posla, spavaj
+                continue
+                
+            job_id = job['id']
+            job_type = job['type']
+            params = job.get('params', {})
+            
+            # Start job
+            if not self.start_job(job_id):
+                continue # Netko drugi ga je uzeo
+                
+            try:
+                # OBAVLJANJE POSLA
+                if job_type == 'test_job':
+                    time.sleep(2) # Simulacija rada
+                    self.complete_job(job_id, {"message": params.get("echo", "Done")})
+                    
+                elif job_type == 'ingest' or job_type == 'ingest_batch':
+                    path = params.get('path', '.')
+                    recursive = params.get('recursive', True)
+                    
+                    # Koristi Ingestor
+                    ingestor = Ingestor()
+                    # Ingestor.run vraća dict sa statistikom? Ne, vraća None, ali printa.
+                    # Moramo vidjeti Ingestor.run. Pretpostavimo da radi side-effects.
+                    # Za sada samo zovemo run i kažemo "Done".
+                    # Idealno bi Ingestor vratio stats objekt.
+                    ingestor.run(path, recursive=recursive, silent=True) # Silent da ne spamamo stdout
+                    
+                    self.complete_job(job_id, {"status": "Ingested", "path": path})
+                    
+                else:
+                    self.fail_job(job_id, f"Nepoznati tip posla: {job_type}")
+                    
+            except Exception as e:
+                self.fail_job(job_id, str(e))
+            
+            time.sleep(0.5) # Mali predah

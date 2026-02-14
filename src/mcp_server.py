@@ -142,6 +142,33 @@ def kronos_ping() -> str:
 
 
 @mcp.tool()
+def kronos_reinit_oracle() -> str:
+    """
+    Ponovo pokreni Oracle inicijalizaciju bez restarta servera.
+    Korisno ako Oracle zapne u 'warming up' stanju zbog privremenog locka.
+    """
+    global _oracle, _oracle_ready, _oracle_error, _oracle_init_event
+    
+    # Resetiraj stanje
+    _oracle_ready = False
+    _oracle_error = None
+    _oracle_init_event = threading.Event()
+    
+    # Pokreni novu inicijalizaciju
+    threading.Thread(target=_init_oracle_background, daemon=True).start()
+    
+    # Čekaj kratko da vidimo prve rezultate
+    _oracle_init_event.wait(timeout=10)
+    
+    if _oracle_ready:
+        return "✅ Oracle uspješno reinicijaliziran i spreman!"
+    elif _oracle_error:
+        return f"❌ Greška pri reinicijalizaciji: {_oracle_error}"
+    else:
+        return "⏳ Reinicijalizacija traje duže nego očekivano (pozadina). Provjerite status za 10 sekundi."
+
+
+@mcp.tool()
 def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-flash") -> str:
     """
     Pitajte Kronos AI sustav o arhitekturi koda, specifičnim datotekama ili znanju o projektu.
@@ -162,7 +189,8 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
             remaining = 30
             _oracle_init_event.wait(timeout=remaining)
             if not _oracle_ready:
-                return "⏳ Kronos se još zagrijava (ChromaDB inicijalizacija). Pokušaj ponovno za 5-10 sekundi."
+                err = _oracle_error or "Nepoznata greška (init timeout)"
+                return f"❌ Oracle inicijalizacija nije uspjela: {err}. Pokušaj pozvati 'kronos_reinit_oracle' ili restartaj Kronos server."
         
         oracle = get_oracle()
         
@@ -497,9 +525,20 @@ def kronos_list_jobs(limit: int = 10) -> str:
         return f"Greška pri listanju poslova: {str(e)}"
 
 
+KRONOS_SSE_PORT = int(os.environ.get("KRONOS_PORT", "8765"))
+
 def main():
-    """Pokreće MCP server u stdio modu s debugging outputom."""
+    """Pokreće MCP server u stdio ili SSE modu."""
     import logging
+    import argparse
+
+    # Parsiranje argumenata
+    parser = argparse.ArgumentParser(description="Kronos MCP Server")
+    parser.add_argument("--sse", action="store_true", help="Pokreni u SSE (HTTP) modu za multi-agent pristup")
+    parser.add_argument("--port", type=int, default=KRONOS_SSE_PORT, help=f"Port za SSE server (default: {KRONOS_SSE_PORT})")
+    args, _ = parser.parse_known_args()
+    
+    transport_mode = "sse" if args.sse else "stdio"
     
     # Logging ide na stderr (ne smeta stdio transportu)
     logging.basicConfig(
@@ -509,27 +548,43 @@ def main():
     )
     
     mcp_logger = logging.getLogger("kronos_mcp")
-    mcp_logger.info("🚀 Kronos MCP Server starting...")
+    mcp_logger.info(f"🚀 Kronos MCP Server starting... (transport: {transport_mode})")
     mcp_logger.info(f"📂 Root dir: {ROOT_DIR}")
     
     try:
-        # --- UKLANJAMO SELF-TEST ZBOG TIMEOUTA ---
-        # mcp_logger.info("🔍 Testing Oracle initialization...")
-        # oracle = get_oracle()
-        # mcp_logger.info("✅ Oracle ready")
-        # -----------------------------------------
+        # --- POKRENI JOB WORKER ---
+        try:
+            jm = get_job_manager()
+            jm.start_worker()
+            mcp_logger.info("👷 Job Worker thread started")
+        except Exception as e:
+            mcp_logger.error(f"❌ Failed to start Job Worker: {e}")
         
-        mcp_logger.info("💬 Starting MCP stdio server...")
-        
-        # --- KRITIČNA RESTAURACIJA ZA KOMUNIKACIJU ---
-        # Vraćamo sistemski FD 1 (stdout) na njegovu pravu metu
-        os.dup2(_original_stdout_fd, 1) # 1 je uvijek FD za stdout
-        
-        # Vraćamo i Python-level objekt na pravi stdout
-        sys.stdout = _real_stdout
-        
-        # Pokrećemo server (ovo blokira)
-        mcp.run(transport="stdio")
+        if transport_mode == "sse":
+            # --- SSE MOD (Multi-Agent) ---
+            # Nema potrebe za stdout zaštitom jer SSE koristi HTTP, ne stdio pipe
+            mcp_logger.info(f"🌐 Starting SSE server on http://localhost:{args.port}")
+            mcp_logger.info(f"📡 Klijenti se spajaju na: http://localhost:{args.port}/sse")
+            mcp_logger.info(f"🔗 Više IDE prozora može koristiti isti server istovremeno!")
+            
+            # Vraćamo stdout jer nam ne treba zaštita u SSE modu
+            os.dup2(_original_stdout_fd, 1)
+            sys.stdout = _real_stdout
+            
+            # Konfiguriraj port i host
+            mcp.settings.host = "0.0.0.0"
+            mcp.settings.port = args.port
+            
+            mcp.run(transport="sse")
+        else:
+            # --- STDIO MOD (Klasični IDE) ---
+            mcp_logger.info("💬 Starting MCP stdio server...")
+            
+            # KRITIČNA RESTAURACIJA ZA KOMUNIKACIJU
+            os.dup2(_original_stdout_fd, 1)
+            sys.stdout = _real_stdout
+            
+            mcp.run(transport="stdio")
         
     except KeyboardInterrupt:
         mcp_logger.info("⚠️ Server interrupted by user")
