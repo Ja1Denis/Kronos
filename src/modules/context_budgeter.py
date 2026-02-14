@@ -126,10 +126,22 @@ class ContextItem:
             return f"--- {self.kind.upper()} ({self.source}) ---\n{self.content}"
 
 class ContextComposer:
-    def __init__(self, config: BudgetConfig = BudgetConfig()):
+    def __init__(self, config: BudgetConfig = BudgetConfig(), model_name: str = "gemini-3-flash"):
         self.config = config
         self.items: List[ContextItem] = []
         self.audit_log: List[str] = []
+        self.model_name = model_name.lower()
+        
+        # Pricing mapping (USD per 1M tokens) - 2026 estimates
+        self.pricing = {
+            "gemini-3-flash": 0.10,
+            "gemini-3-pro": 1.25,
+            "gemini-2-flash": 0.15,
+            "claude-3.5-sonnet": 3.00,
+            "claude-3-opus": 15.00,
+            "gpt-4o": 5.00,
+            "default": 0.15
+        }
         
         # State tracking during composition
         self.current_tokens = 0
@@ -141,7 +153,6 @@ class ContextComposer:
         self.file_chunk_counts: Dict[str, int] = {}
         self.file_token_counts: Dict[str, int] = {}
         self.seen_keys: Set[str] = set()
-        self.audit_log: List[str] = []
         
         # Savings Metrics
         self.potential_tokens = 0 # What a "dumb" RAG would send
@@ -267,16 +278,17 @@ class ContextComposer:
         saved = max(0, self.potential_tokens - actual)
         efficiency = (saved / self.potential_tokens * 100) if self.potential_tokens > 0 else 0
         
-        # Procijenjena ušteda (Gemini 1.5 Flash: ~$0.15 na milijun tokena)
-        usd_saved = (saved / 1_000_000) * 0.15
+        # Dinamička procijenu cijene bazirana na modelu
+        price_per_m = self.pricing.get(self.model_name, self.pricing["default"])
+        usd_saved = (saved / 1_000_000) * price_per_m
         
         report = "\n---\n"
-        report += "### 🛡️ Kronos Efficiency Report\n"
-        report += f"- **Actual Input:** {actual:,} tokens (Pointer Optimized)\n"
-        report += f"- **Standard RAG:** {self.potential_tokens:,} tokens (Full Context)\n"
+        report += f"### 🛡️ Kronos Efficiency Report ({self.model_name.upper()} Optimized)\n"
+        report += f"- **Actual Input:** {actual:,} tokens\n"
+        report += f"- **Raw RAG Context:** {self.potential_tokens:,} tokens\n"
         report += f"- **Savings:** **{efficiency:.1f}% Token Reduction** 📉\n"
         if saved > 0:
-            report += f"- **ROI:** Ovaj upit vam je uštedio cca **${usd_saved:.5f}**.\n"
+            report += f"- **Estimated ROI:** Uštedjeli ste cca **${usd_saved:.6f}**.\n"
         report += "---\n"
         return report
 

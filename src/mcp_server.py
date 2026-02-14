@@ -63,6 +63,12 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from src.modules.ledger import SavingsLedger
+
+# Inicijaliziraj Ledger
+LEDGER_DB_PATH = os.path.join(ROOT_DIR, "data", "jobs.db") # Koristimo istu bazu kao jobs
+_ledger = SavingsLedger(LEDGER_DB_PATH)
+
 from mcp.server.fastmcp import FastMCP
 import contextlib
 
@@ -136,13 +142,14 @@ def kronos_ping() -> str:
 
 
 @mcp.tool()
-def kronos_query(query: str, mode: str = "light") -> str:
+def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-flash") -> str:
     """
     Pitajte Kronos AI sustav o arhitekturi koda, specifičnim datotekama ili znanju o projektu.
     
     Args:
         query: Pitanje za Kronos (npr. "Kako radi Oracle klasa?")
         mode: Način upita: 'light' (1500 tokens), 'auto' (4000 tokens), 'extra' (8000 tokens).
+        client_model: Naziv modela koji poziva alat (npr. 'gemini-3-flash', 'claude-3-opus').
     
     Returns:
         Odgovor baze znanja s relevantnim kontekstom.
@@ -203,6 +210,21 @@ def kronos_query(query: str, mode: str = "light") -> str:
         # 3. Finalni formatirani odgovor
         main_context = composer.compose()
         efficiency_report = composer.get_efficiency_report()
+        
+        # 4. Spremi u Ledger (samo ako je bilo potencijala)
+        if composer.potential_tokens > 0:
+            saved_tokens = max(0, composer.potential_tokens - composer.current_tokens)
+            # Izračunaj USD
+            price = composer.pricing.get(composer.model_name, composer.pricing["default"])
+            usd_saved = (saved_tokens / 1_000_000) * price
+            
+            _ledger.record_savings(
+                query=query, 
+                model=composer.model_name,
+                potential=composer.potential_tokens,
+                actual=composer.current_tokens,
+                usd_saved=usd_saved
+            )
         
         return main_context + "\n" + efficiency_report
     
@@ -301,20 +323,17 @@ def kronos_stats() -> str:
         except Exception as e:
             output.append(f"\n*Greška pri dohvaćanju Job Queue stats: {e}*")
             
-        # Demo Financial Efficiency (Simulated for Demo)
-        total_jobs = 100 # Default if jm fails
-        try: total_jobs = jm.get_job_stats()['total']
-        except: pass
-        
-        saved_tokens = total_jobs * 12500 # Assume avg 12.5k saved per job/query
-        saved_usd = (saved_tokens / 1_000_000) * 0.15
-        
-        output.append(f"\n### 💰 Financial Efficiency (Demo)")
-        output.append(f"| Metrika | Procjena |")
-        output.append(f"|---------|----------|")
-        output.append(f"| **Saved Tokens** | {saved_tokens:,} |")
-        output.append(f"| **Avoided Cost** | **${saved_usd:.2f}** |")
-        output.append(f"| **ROI Factor** | 24.5x 🚀 |")
+        # Financial Efficiency (From Ledger)
+        try:
+            lstats = _ledger.get_summary(days=30)
+            output.append(f"\n### 💰 Financial Efficiency (Last 30 Days)")
+            output.append(f"| Metrika | Vrijednost |")
+            output.append(f"|---------|------------|")
+            output.append(f"| **Saved Tokens** | {lstats['recent_saved_tokens']:,} |")
+            output.append(f"| **Avoided Cost** | **${lstats['recent_usd_saved']:.4f}** |")
+            output.append(f"| **Total All-Time** | **${lstats['total_usd_saved']:.2f}** |")
+        except Exception as e:
+            output.append(f"\n*Greška pri dohvaćanju Ledger stats: {e}*")
 
         return "\n".join(output)
         
