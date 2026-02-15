@@ -503,7 +503,7 @@ class Oracle:
                         # Dohvati popis svih projekata iz baze
                         try:
                             import sqlite3
-                            conn = sqlite3.connect(self.librarian.meta_path)
+                            conn = self.librarian._get_sqlite_conn()
                             cursor = conn.cursor()
                             cursor.execute("SELECT DISTINCT project FROM knowledge_fts WHERE project IS NOT NULL")
                             projects = [row[0] for row in cursor.fetchall()]

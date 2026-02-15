@@ -38,7 +38,7 @@ class JobManager:
 
     def _execute(self, query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False) -> Any:
         """Helper to execute a query and close the connection."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         try:
             cursor = conn.cursor()
@@ -63,7 +63,7 @@ class JobManager:
 
     def _init_db(self):
         """Initializes the database schema if it doesn't exist."""
-        conn = sqlite3.connect(self.db_path)
+        conn = self._get_connection()
         try:
             # Create jobs table
             conn.execute('''
