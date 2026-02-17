@@ -175,5 +175,5 @@ python -m pytest tests/ -v
 ---
 
 ## 📝 License & Credits
-Made with ❤️ for advanced AI collaboration.
+Made with ❤️ for advanced AI collaboration by **Denis Sakač**.
 Licensed under the **MIT License**.
