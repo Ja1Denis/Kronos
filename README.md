@@ -1,102 +1,104 @@
 # Kronos ⏳
-**Lokalni Sustav Semantičke Memorije za AI Agente**
+**Local Semantic Memory System for AI Agents**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: Beta-Rust](https://img.shields.io/badge/Status-Beta--Rust-orange.svg)]()
+[![Status: v0.6.1](https://img.shields.io/badge/Status-v0.6.1--Stable-orange.svg)]()
 
-Kronos je napredni memorijski sustav koji omogućuje AI agentima dugoročno pamćenje i duboko razumijevanje konteksta projekta uz **drastično smanjenje troškova** putem inovativnog "Pointer-based" RAG pristupa.
+Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
 ---
 
-## 💰 Efikasnost Tokena - Kronos Prednost
+## 💰 Token Efficiency - The Kronos Advantage
 
-### Zašto su "Pointeri" (pokazivači) važni?
+### Why are "Pointers" important?
+Traditional RAG systems send **entire document blocks** to your LLM, consuming huge amounts of tokens. Kronos instead sends **lightweight pointers**, allowing the AI to decide what it actually needs.
 
-Tradicionalni RAG sustavi šalju **cijele blokove dokumenata** vašem LLM-u, trošeći ogromne količine tokena. Kronos umjesto toga šalje **lagane pokazivače**, dopuštajući AI-u da sam odluči što mu zaista treba.
-
-### Vizualna usporedba
-
+### Visual Comparison
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ Tradicionalni RAG (Šalje sav sadržaj)                       │
-│ ████████████████████████████████████████████  15,000 tokena │
-│ Trošak: $0.021 po upitu                                     │
+│ Traditional RAG (Sends all content)                        │
+│ ████████████████████████████████████████████  15,000 tokens │
+│ Cost: $0.021 per query                                      │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Kronos Pointeri (Samo metapodaci)                           │
-│ ██ 300 tokena                                               │
-│ Trošak: $0.00042 po upitu                                   │
+│ Kronos Pointers (Metadata only)                             │
+│ ██ 300 tokens                                               │
+│ Cost: $0.00042 per query                                    │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Kronos Smart Fetch (Pointeri + Selektivni sadržaj)          │
-│ ████████ 2,500 tokena                                       │
-│ Trošak: $0.0035 po upitu                                    │
+│ Kronos Smart Fetch (Pointers + Selective Content)           │
+│ ████████ 2,500 tokens                                       │
+│ Cost: $0.0035 per query                                     │
 └─────────────────────────────────────────────────────────────┘
 
-📉 **83-98% smanjenje broja tokena**
-💵 **5-50x ušteda na troškovima**
+📉 **83-98% reduction in token count**
+💵 **5-50x cost savings**
 ```
 
-### Stvarni izračun troškova
+### Real-world Cost Calculation
+Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
-Bazirano na **Gemini 1.5 Flash-8B** cijenama ($0.14/1M tokena):
+| Monthly Volume    | Traditional RAG | Kronos (Pointers only) | Kronos (Smart Fetch) | Annual Savings  |
+|-------------------|-----------------|------------------------|----------------------|-----------------|
+| **1,000 queries**  | $15.00          | $0.30                  | $2.50                | **$150-176**    |
+| **10,000 queries** | $150.00         | $3.00                  | $25.00               | **$1,500-1,764**|
+| **100,000 queries**| $1,500.00       | $30.00                 | $250.00              | **$15,000-17,640**|
 
-| Mjesečni volumen  | Tradicionalni RAG | Kronos (Samo Pointeri) | Kronos (Smart Fetch) | Godišnja ušteda |
-|-------------------|-------------------|------------------------|----------------------|-----------------|
-| **1,000 upita**   | $21               | $0.42                  | $3.50                | **$210-246**    |
-| **10,000 upita**  | $210              | $4.20                  | $35                  | **$2,100-2,460**|
-| **100,000 upita** | $2,100            | $42                    | $350                 | **$21,000-24,600**|
+<sub>*Calculated with 15k tokens/query (RAG), 300 tokens/query (Pointer), 2.5k tokens/query (Smart Fetch)*</sub>
 
-<sub>*Izračunato s 15k tokena/upit (RAG), 300 tokena/upit (Pointer), 2.5k tokena/upit (Smart Fetch)*</sub>
-
-💡 **Break-even točka: ~500 upita** (Kronos se isplaćuje u danima, ne mjesecima!)
-
----
-
-- 🛡️ **MCP IDE Integration**: Native stdio komunikacija za Windows (Antigravity/Gemini klijenti). Uključuje "Zero-Pollution" stdout štit za stabilnost.
-- 📉 **Shadow Accounting**: Ugrađeno praćenje i izvještavanje o stvarnoj uštedi tokena i novca unutar svakog odgovora.
-- ⚡ **Rust Fast-Path (L0/L1)**: Ultra-brza pretraga pojmova implementirana u Rustu (**< 1ms**).
-- 🔍 **Hibridna Pretraga**: Kombinacija vektorske pretrage (ChromaDB) i precizne FTS5 pretrage (SQLite).
-- ⚖️ **Temporal Truth**: Prati evoluciju odluka kroz vrijeme (`valid_from`, `valid_to`).
-- 📂 **Project Awareness**: Automatska izolacija znanja po projektima.
-- 🛠️ **Smart Fetching**: AI samostalno zahtijeva točne linije koda tek kada su mu potrebne.
+💡 **Break-even point: ~500 queries** (Kronos pays for itself in days, not months!)
 
 ---
 
-## 🏗️ Arhitektura (High-Level)
+## ✨ Key Features (v0.6.1)
+
+- 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage. Enables cross-project pattern matching and knowledge reuse.
+- 🚀 **Multi-Agent Scaling**: Server-client architecture via **SSE transport**. Multiple IDE instances (VS Code, Cursor, Antigravity) can share the same memory without "database locked" errors.
+- ⚡ **Rust Fast-Path (L0/L1)**: Ultra-fast literal match search implemented in Rust (**< 1ms**).
+- 🛡️ **MCP IDE Integration**: Native stdio/SSE communication for Windows agents. Includes "Zero-Pollution" stdout shielding for maximum stability.
+- 📉 **Shadow Accounting**: Built-in tracking of actual token and money savings reported in every AI response.
+- 🔍 **Hybrid Search**: Combination of Vector search (ChromaDB) and precise FTS5 keyword search (SQLite).
+- ⚖️ **Temporal Truth**: Tracks decision evolution over time (`valid_from`, `valid_to`).
+- 📂 **Project Awareness**: Automatic knowledge isolation and filtering per project.
+
+---
+
+## 🏗️ High-Level Architecture
 
 ```text
-[ AI Client / Antigravity ] <--> [ FastAPI Server (Port 8000) ]
+[ AI Client / Antigravity ] <--> [ FastAPI Server (Port 8765) ]
                                           |
         ┌─────────────────────────────────┴──────────────────────────────┐
         ▼                                 ▼                              ▼
- [ Rust FastPath ]                [ SQLite (FTS5) ]              [ ChromaDB (Vector) ]
- (Literal Matches)                (Keyword Rank)                 (Semantic Score)
+ [ Rust FastPath ]                [ SQLite (FTS5) ]            [ ChromaDB (Vector) ]
+ (Literal Matches)                (Keyword Rank)               (Semantic Score)
         │                                 │                              │
-        └─────────────────────────────────┬──────────────────────────────┘
-                                          ▼
-                         [ Oracle (Reranking & Selection) ]
-                                          │
-                                 [ Context Budgeter ]
+        └──────────────────────────┬──────┴──────────────────────────────┘
+                                   ▼
+                   [ Disk Knowledge Graph (v0.6.1) ]
+                                   │
+                   [ Oracle (Reranking & Selection) ]
+                                   │
+                          [ Context Budgeter ]
 ```
 
 ---
 
-## 🚀 Integracija u IDE (MCP)
+## 🚀 IDE Integration (MCP)
 
-Kronos podržava **Model Context Protocol**. Konfigurirajte svoj IDE (npr. Gemini/Antigravity) dodavanjem sljedećeg u `mcp_config.json`:
+Kronos supports the **Model Context Protocol**. Configure your IDE (e.g., Gemini/Antigravity) by adding this to your `mcp_config.json`:
 
 ```json
 {
   "mcpServers": {
     "kronos": {
       "command": "python",
-      "args": ["-u", "C:/PUTANJA/DO/KRONOS/src/mcp_server.py"],
+      "args": ["-u", "C:/PATH/TO/KRONOS/src/mcp_server.py"],
       "env": {
-        "PYTHONPATH": "C:/PUTANJA/DO/KRONOS",
+        "PYTHONPATH": "C:/PATH/TO/KRONOS",
         "PYTHONUNBUFFERED": "1"
       }
     }
@@ -104,51 +106,56 @@ Kronos podržava **Model Context Protocol**. Konfigurirajte svoj IDE (npr. Gemin
 }
 ```
 
-> **Napomena:** Obavezno zamijenite `C:/PUTANJA/DO/KRONOS` sa stvarnom putanjom do foldera gdje ste klonirali projekt na vašem računalu.
+> **Note:** Replace `C:/PATH/TO/KRONOS` with the actual absolute path to your cloned Kronos directory.
 
-### 🛡️ Robusnost na Windowsima
-Server koristi **OS-level stdout hijacking** (`os.dup2`) kako bi spriječio "zagađivanje" komunikacije. Svi nepotrebni ispisi (logs, native library noise) automatski se preusmjeravaju na `stderr`.
+### 🛡️ Windows Robustness
+The server uses **OS-level stdout hijacking** (`os.dup2`) to prevent communication "pollution". All non-JSON output (logs, native noise) is redirected to `stderr`.
 
 ---
 
-## 🚀 Brzi Start
+## 🏁 Quick Start
 
-### 1. Instalacija
+### 1. Installation
 ```powershell
 git clone https://github.com/Ja1Denis/Kronos.git
 cd Kronos
 pip install -r requirements.txt
 ```
 
-### 2. Konfiguracija 🔑
-Postavite Gemini API ključ u vaš `.env` file za snagu AI sinteze.
+### 2. Configuration 🔑
+Add your `GEMINI_API_KEY` to a `.env` file for AI synthesis and embeddings.
 
-### 3. Ingestija
+### 3. Build Knowledge Graph (v0.6.1)
+```powershell
+python scripts/build_knowledge_graph.py --path . --project MyProject
+```
+
+### 4. Ingestion
 ```powershell
 python .\ingest_everything.py
 ```
 
-### 4. Korištenje
-Jednostavno dodajte `@kronos` u upit vašem agentu. Svaki odgovor će završiti s **Efficiency Reportom** koji pokazuje vašu uštedu.
+### 5. Usage
+Add `@kronos` to your agent query. Each response will include an **Efficiency Report** showing your ROI.
 
 ---
 
-## 🛠️ Razvoj i Maintenance
+## 🛠️ Development & Maintenance
 
-### Reset i Čišćenje
-Ako želiš svjež početak:
+### Reset and Wipe
+For a fresh start:
 ```powershell
-# Prisilni wipe bez potvrde
+# Force wipe without confirmation
 .\run.ps1 wipe --force
 ```
 
-### Testiranje
+### Testing
 ```powershell
 python -m pytest tests/ -v
 ```
 
 ---
 
-## 📝 Licenca i Zasluge
-Izrađeno s ❤️ za naprednu AI kolaboraciju.
-Licencirano pod **MIT Licencom**.
+## 📝 License & Credits
+Made with ❤️ for advanced AI collaboration.
+Licensed under the **MIT License**.
