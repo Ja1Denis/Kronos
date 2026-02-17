@@ -9,6 +9,14 @@ Kronos is an advanced memory system that provides AI agents with long-term memor
 
 ---
 
+## 🌍 Project Origin & Language Note
+
+Kronos started as a personal internal tool for managing local AI knowledge, primarily documented in **Croatian**. After seeing its massive impact on development efficiency and ROI, I decided to open-source it to the global community.
+
+We are currently in the process of transitioning all codebase comments and internal documentation to **English**. If you encounter sections in Croatian, feel free to contribute by providing translations!
+
+---
+
 ## 💰 Token Efficiency - The Kronos Advantage
 
 ### Why are "Pointers" important?

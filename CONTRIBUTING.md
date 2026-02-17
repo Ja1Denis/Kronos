@@ -13,7 +13,11 @@ Thank you for your interest in contributing to Kronos! We welcome all contributi
 - Open a GitHub Issue with the tag `enhancement`.
 - Describe the feature you'd like to see and why it would be useful.
 
-### 3. Code Contributions
+### 3. Translation & Documentation
+- Since the project originated in Croatian, many code comments and docs are being translated.
+- Help us translate Croatian strings/comments to English! This is a great way for new contributors to get started.
+
+### 4. Code Contributions
 1. Fork the repository.
 2. Create a new branch (`feat/your-feature` or `fix/your-bug`).
 3. Commit your changes with clear messages.
