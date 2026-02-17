@@ -75,6 +75,20 @@ Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
 ---
 
+## 🏛️ Kronos Architect Protocol
+
+Kronos isn't just a tool; it's a methodology. The **Kronos Architect Protocol** is a standardized workflow for AI agents that ensures every line of code is built upon existing knowledge, maximizing reuse and minimizing token waste.
+
+1.  **STOP & THINK**: Analyze before coding.
+2.  **SEARCH**: Find existing patterns.
+3.  **QUERY**: Understand the details.
+4.  **REUSE**: Adapt, don't invent.
+5.  **SYNTHESIS**: Execute with precision.
+
+See [AGENTS.md](AGENTS.md) for the full protocol definition.
+
+---
+
 ## 📈 Case Study: Reducing Hallucinations by 100%
 
 In a real-world scenario (MatematikaPro project), Kronos prevented a "Senior-level" architectural error:
