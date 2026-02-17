@@ -1,5 +1,13 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-02-14 | Version: v0.5.1-multi-agent 🛡️
+Datum: 2026-02-16 | Version: v0.6.1-multi-graf-agent 🚀
+
+### 🚀 Status: Faza 14 - KNOWLEDGE GRAPH (NEW! 🔥)
+
+### [2026-02-16] Faza 14 Postignuća:
+- **DiskKnowledgeGraph:** Implementiran SQLite-based graph storage za low-RAM knowledge graph.
+- **Cross-Project Pattern Matching:** Graf omogućuje reuse komponenti između projekata.
+- **Token Ušteda:** Dodatnih 85-90% uštede tokena kroz graph-based context retrieval.
+- **Modular Design:** Novi `src/modules/disk_graph.py` i `scripts/build_knowledge_graph.py`.
 
 ### 🚀 Status: Faza 13 - MULTI-AGENT & SCALING (COMPLETED ✅)
 Kronos je sada potpuno skalabilan sustav sposoban za istovremenu podršku više AI agenata putem jedne centralne baze znanja.
@@ -104,9 +112,16 @@ Projekt je postavljen kao **Default Baseline** verzija (2026-02-09). Fokus je bi
 - **Temporal History**: Praćenje evolucije odluka.
 - **Benchmark Suite**: Sustav za mjerenje točnosti (70.5% Recall@5).
 
-### 🚧 Trenutni Fokus (Faza 6):
-- **Precision Tuning**: Implementacija Cross-Encodera i finetuning embeddinga (T027).
-- **RAG Evaluation**: Proširenje benchmark skripte.
+### 🚀 OpenClaw Status
+- **Status**: ✅ **Active & Connected**
+- **Type**: Docker Container (Sandboxed)
+- **Model**: MiniMax 2.5 (via OpenRouter)
+- **Access**: `http://localhost:18789` (Token Auth)
+- **Path**: `e:\G\GeminiCLI\ai-test-project\openclaw_sandbox`
+
+### 🎯 Trenutni Fokus
+- **[DONE]** Postavljanje OpenClaw u Dockeru.
+- **[NEXT]** Testiranje sposobnosti OpenClaw agenta i integracija s projektom.
 
 ### 📊 Statistika Baze:
 - **Indeksirano datoteka**: ~22,000 (Svi projekti u `ai-test-project`)

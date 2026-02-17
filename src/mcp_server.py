@@ -563,7 +563,7 @@ def main():
         if transport_mode == "sse":
             # --- SSE MOD (Multi-Agent) ---
             # Nema potrebe za stdout zaštitom jer SSE koristi HTTP, ne stdio pipe
-            mcp_logger.info(f"🌐 Starting SSE server on http://localhost:{args.port}")
+            mcp_logger.info(f"🌐 Starting SSE server on http://0.0.0.0:{args.port}")
             mcp_logger.info(f"📡 Klijenti se spajaju na: http://localhost:{args.port}/sse")
             mcp_logger.info(f"🔗 Više IDE prozora može koristiti isti server istovremeno!")
             
@@ -574,7 +574,37 @@ def main():
             # Konfiguriraj port i host
             mcp.settings.host = "0.0.0.0"
             mcp.settings.port = args.port
+
+            # --- Docker Host Header Fix (421 Misdirected Request) ---
+            # Starlette/MCP odbija zahtjeve s Host headerom koji nije "localhost".
+            # Docker kontejneri šalju "Host: host.docker.internal" što uzrokuje 421.
+            # Rješenje: ASGI middleware koji prepisuje Host header PRIJE nego ga Starlette vidi.
             
+            class HostRewriteMiddleware:
+                """Prepisuje Host header na localhost za Docker kompatibilnost."""
+                def __init__(self, app):
+                    self.app = app
+                async def __call__(self, scope, receive, send):
+                    if scope["type"] in ("http", "websocket"):
+                        headers = list(scope.get("headers", []))
+                        new_headers = []
+                        for name, value in headers:
+                            if name == b"host":
+                                port = value.decode().split(":")[-1] if b":" in value else "8765"
+                                new_headers.append((b"host", f"localhost:{port}".encode()))
+                            else:
+                                new_headers.append((name, value))
+                        scope = dict(scope, headers=new_headers)
+                    await self.app(scope, receive, send)
+            
+            import uvicorn
+            _orig_config_init = uvicorn.Config.__init__
+            def _patched_config_init(self_cfg, app, *a, **kw):
+                wrapped = HostRewriteMiddleware(app)
+                _orig_config_init(self_cfg, wrapped, *a, **kw)
+            uvicorn.Config.__init__ = _patched_config_init
+            mcp_logger.info("🛡️ HostRewriteMiddleware aktiviran (Docker compatible)")
+
             mcp.run(transport="sse")
         else:
             # --- STDIO MOD (Klasični IDE) ---

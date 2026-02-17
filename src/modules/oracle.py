@@ -14,6 +14,14 @@ from src.modules.types import QueryType, Pointer, SearchResult
 from src.utils.metrics import metrics
 from src.utils.logger import logger
 
+# Import Graph (v0.6.1+)
+try:
+    from src.modules.disk_graph import DiskKnowledgeGraph
+    GRAPH_AVAILABLE = True
+except ImportError:
+    GRAPH_AVAILABLE = False
+    logger.warning("Graph module not available - running in legacy mode")
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=5))
 def resilient_vector_query(collection, query, n_results=5, where=None):
     """Retry vector query do 3 puta s exponential backoff"""
@@ -49,6 +57,17 @@ class Oracle:
                 self.embedding_function = None
         else:
             self.embedding_function = None
+
+        # Initialize Knowledge Graph (v0.6.1+)
+        self.graph = None
+        if GRAPH_AVAILABLE:
+            try:
+                graph_db_path = os.path.join(os.path.dirname(db_path), 'knowledge_graph.db')
+                if os.path.exists(graph_db_path):
+                    self.graph = DiskKnowledgeGraph(graph_db_path)
+                    logger.info(f"📊 Graph loaded: {self.graph.get_stats()['total_nodes']} nodes")
+            except Exception as e:
+                logger.warning(f"Could not initialize graph: {e}")
 
         # ChromaDB može biti zaključan na Windowsima, pa koristimo retry
         import time
@@ -337,6 +356,69 @@ class Oracle:
              })
              
         return candidates
+
+    def get_graph_context(self, query: str, max_results: int = 5) -> Dict:
+        """
+        Dohvati graph context za upit (v0.6.1+).
+        
+        Args:
+            query: Korisnički upit
+            max_results: Maksimalan broj rezultata
+            
+        Returns:
+            Dict s graph informacijama (classes, methods, files, dependencies)
+        """
+        if not self.graph:
+            return {"available": False, "message": "Graph not initialized"}
+        
+        try:
+            context = {
+                "available": True,
+                "stats": self.graph.get_stats(),
+                "results": []
+            }
+            
+            # Search for relevant nodes
+            search_terms = query.lower().split()
+            
+            # Find classes matching query
+            classes = self.graph.search_nodes(node_type='class', limit=max_results)
+            classes = [c for c in classes if any(term in c.get('content', '').lower() for term in search_terms)]
+            
+            # Find functions matching query  
+            funcs = self.graph.search_nodes(node_type='function', limit=max_results)
+            funcs = [f for f in funcs if any(term in f.get('content', '').lower() for term in search_terms)]
+            
+            # Find files matching query
+            files = self.graph.search_nodes(node_type='file', limit=max_results)
+            files = [f for f in files if any(term in f.get('content', '').lower() for term in search_terms)]
+            
+            # Build context
+            if classes:
+                context["results"].append({
+                    "type": "classes",
+                    "count": len(classes),
+                    "items": [{"name": c.get("content"), "file": c.get("metadata", {}).get("file", "")} for c in classes]
+                })
+            
+            if funcs:
+                context["results"].append({
+                    "type": "functions", 
+                    "count": len(funcs),
+                    "items": [{"name": f.get("content")} for f in funcs]
+                })
+            
+            if files:
+                context["results"].append({
+                    "type": "files",
+                    "count": len(files),
+                    "items": [{"path": f.get("content")} for f in files]
+                })
+            
+            return context
+            
+        except Exception as e:
+            return {"available": True, "error": str(e)}
 
     def ask(self, query, project=None, limit=10, silent=False, hyde=True, expand=False):
         """

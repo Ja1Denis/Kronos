@@ -103,7 +103,8 @@ class Librarian:
             # Brisanje po metapodatku 'source' i 'type'='entity'
             collection.delete(where={"$and": [{"source": source_path}, {"type": "entity"}]})
         except Exception as e:
-            print(f"{Fore.RED}Greška pri brisanju entiteta iz ChromaDB: {e}{Style.RESET_ALL}")
+            # Ignoriraj ako kolekcija ne postoji ili je prazna
+            pass
 
 
     def _init_sqlite(self):
