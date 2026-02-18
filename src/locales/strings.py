@@ -83,6 +83,9 @@ class Strings:
     METRIC_KNOWLEDGE = "Extracted Knowledge"
     METRIC_DB_SIZE = "Database Size"
     METRIC_JOB_QUEUE = "Job Queue"
+    METRIC_SAVED_TOKENS = "Saved Tokens (30d)"
+    METRIC_AVOIDED_COST = "Avoided Cost (30d)"
+    METRIC_TOTAL_SAVED = "Total Savings (All-time)"
 
 class EnStrings(Strings):
     """English strings (default)."""
@@ -173,6 +176,9 @@ class HrStrings(Strings):
     METRIC_KNOWLEDGE = "Ekstrahirano Znanje"
     METRIC_DB_SIZE = "Veličina Baze"
     METRIC_JOB_QUEUE = "Job Queue"
+    METRIC_SAVED_TOKENS = "Ušteda tokena (30d)"
+    METRIC_AVOIDED_COST = "Izbjegnuti trošak (30d)"
+    METRIC_TOTAL_SAVED = "Ukupna ušteda (All-time)"
 
 def get_strings(lang_code: str = 'en') -> Strings:
     """Factory function to get the strings for a specific language."""

@@ -237,6 +237,33 @@ Once the server is running (via MCP in your IDE), you can simply mention `@krono
 
 Kronos will intercept the request, search its memory, and inject the relevant code/docs into the context *before* the LLM answers.
 
+### 7. Monitoring & Efficiency 📊
+Track your knowledge growth and financial savings at any time:
+
+```powershell
+python -m src.main stats
+```
+
+**Example Output (Power User):**
+```text
+┌──────────────────────────┬───────────────────────────────────────┐
+│ Category                 │ Details                               │
+├──────────────────────────┼───────────────────────────────────────┤
+│ Total Files              │ 12,450                                │
+│ Total Chunks             │ 158,200                               │
+│ Extracted Knowledge      │ • Code: 45,600                        │
+│                          │ • Decision: 842                       │
+│                          │ • Problem: 312                        │
+│                          │ • Solution: 295                       │
+│                          │ • Task: 8,400                         │
+│ Database Size            │ 4.82 GB                               │
+│ Job Queue                │ Total: 12,500 | OK: 99.9% | Lat: 0.8s │
+│ Saved Tokens (30d)       │ 12,450,000                            │
+│ Avoided Cost (30d)       │ $124.50                               │
+│ Total Savings (All-time) │ $1,450.25                             │
+└──────────────────────────┴───────────────────────────────────────┘
+```
+
 ## ❓ Troubleshooting
 
 ### "No module named 'chromadb'" or 'dotenv'

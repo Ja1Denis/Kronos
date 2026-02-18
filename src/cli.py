@@ -13,6 +13,7 @@ from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
 from src.modules.job_manager import JobManager
+from src.modules.ledger import SavingsLedger
 from src.utils.llm_client import LLMClient
 from src.config import STRINGS
 
@@ -380,13 +381,25 @@ def stats():
     table.add_row(STRINGS.METRIC_KNOWLEDGE, entities_str or "0")
     
     # Veličina
-    db_size = stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)
-    table.add_row(STRINGS.METRIC_DB_SIZE, f"{db_size/1024:.2f} MB")
+    db_size = (stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)) / 1024
+    table.add_row(STRINGS.METRIC_DB_SIZE, f"{db_size:.2f} MB")
     
     # Job Queue Summary
     job_stats = JobManager().get_job_stats()
     job_summary = f"Total: {job_stats['total']} | OK: {job_stats['success_rate']} | Lat: {job_stats['avg_latency_sec']}"
     table.add_row(STRINGS.METRIC_JOB_QUEUE, job_summary)
+    
+    # Financial Efficiency (Ledger)
+    try:
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(root_dir, "data", "jobs.db")
+        ledger = SavingsLedger(db_path)
+        l_stats = ledger.get_summary(days=30)
+        table.add_row(STRINGS.METRIC_SAVED_TOKENS, f"{l_stats['recent_saved_tokens']:,}")
+        table.add_row(STRINGS.METRIC_AVOIDED_COST, f"${l_stats['recent_usd_saved']:.2f}")
+        table.add_row(STRINGS.METRIC_TOTAL_SAVED, f"${l_stats['total_usd_saved']:.2f}")
+    except Exception as e:
+        table.add_row("Ledger", f"[dim]Stats unavailable ({e})[/]")
     
     console.print(table)
     
