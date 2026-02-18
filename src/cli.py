@@ -47,15 +47,15 @@ def ingest(
 
     # Prikaži statistiku nakon unosa
     stats = Librarian().get_stats()
-    table = Table(title="Status Memorije", box=None, header_style="bold cyan")
-    table.add_column("Metrika", style="accent")
-    table.add_column("Vrijednost", justify="right")
+    table = Table(title=STRINGS.LABEL_STATUS, box=None, header_style="bold cyan")
+    table.add_column(STRINGS.LABEL_METRIC, style="accent")
+    table.add_column(STRINGS.LABEL_VALUE, justify="right")
     
-    table.add_row("Ukupno datoteka", str(stats.get('total_files', 0)))
-    table.add_row("Ukupno chunkova", str(stats.get('total_chunks', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_FILES, str(stats.get('total_files', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_CHUNKS, str(stats.get('total_chunks', 0)))
     
     for etype, count in stats.get('entities', {}).items():
-        table.add_row(f"Entiteti ({etype})", str(count))
+        table.add_row(STRINGS.METRIC_ENTITIES.format(type=etype), str(count))
         
     console.print("\n")
     console.print(table)
@@ -368,25 +368,25 @@ def stats():
     librarian = Librarian()
     stats_data = librarian.get_stats()
     
-    table = Table(title="📊 Kronos Statistika", border_style="accent")
-    table.add_column("Kategorija", style="cyan")
-    table.add_column("Detalji", style="white")
+    table = Table(title=f"📊 {STRINGS.CMD_STATS_HELP}", border_style="accent")
+    table.add_column(STRINGS.LABEL_CATEGORY, style="cyan")
+    table.add_column(STRINGS.LABEL_DETAILS, style="white")
     
-    table.add_row("Indeksirane Datoteke", str(stats_data.get('total_files', 0)))
-    table.add_row("Semantički Chunkovi", str(stats_data.get('total_chunks', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_FILES, str(stats_data.get('total_files', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_CHUNKS, str(stats_data.get('total_chunks', 0)))
     
     # Entiteti
     entities_str = "\n".join([f"• {k.capitalize()}: {v}" for k, v in stats_data.get('entities', {}).items()])
-    table.add_row("Ekstrahirano Znanje", entities_str or "0")
+    table.add_row(STRINGS.METRIC_KNOWLEDGE, entities_str or "0")
     
     # Veličina
     db_size = stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)
-    table.add_row("Veličina Baze", f"{db_size/1024:.2f} MB")
+    table.add_row(STRINGS.METRIC_DB_SIZE, f"{db_size/1024:.2f} MB")
     
     # Job Queue Summary
     job_stats = JobManager().get_job_stats()
     job_summary = f"Total: {job_stats['total']} | OK: {job_stats['success_rate']} | Lat: {job_stats['avg_latency_sec']}"
-    table.add_row("Job Queue", job_summary)
+    table.add_row(STRINGS.METRIC_JOB_QUEUE, job_summary)
     
     console.print(table)
     
@@ -403,10 +403,10 @@ def projects():
         return
         
     table = Table(title="🏢 Kronos Multi-Project Dashboard", border_style="accent")
-    table.add_column("Projekt", style="bold cyan")
-    table.add_column("Files", justify="center")
-    table.add_column("Chunks", justify="center")
-    table.add_column("Knowledge (Entities)", style="dim")
+    table.add_column(STRINGS.LABEL_PROJECT, style="bold cyan")
+    table.add_column(STRINGS.LABEL_FILES, justify="center")
+    table.add_column(STRINGS.LABEL_CHUNKS, justify="center")
+    table.add_column(STRINGS.LABEL_KNOWLEDGE, style="dim")
     
     for name, data in proj_stats.items():
         entities_summary = ", ".join([f"{k}:{v}" for k, v in data["entities"].items()])
@@ -435,10 +435,10 @@ def decisions(
         return
     
     table = Table(title="⚖️ Odluke", border_style="accent")
-    table.add_column("ID", style="dim", width=6)
-    table.add_column("Sadržaj", style="white", max_width=50)
-    table.add_column("Vrijedi", style="cyan")
-    table.add_column("Status", style="green")
+    table.add_column(STRINGS.LABEL_ID, style="dim", width=6)
+    table.add_column(STRINGS.LABEL_CONTENT, style="white", max_width=50)
+    table.add_column(STRINGS.LABEL_VALIDITY, style="cyan")
+    table.add_column(STRINGS.LABEL_STATUS, style="green")
     
     for dec in decision_list:
         dec_id = str(dec['id'])
@@ -790,11 +790,11 @@ def jobs(
         return
 
     table = Table(title="🕒 Nedavni Poslovi", border_style="accent")
-    table.add_column("ID", style="dim", width=8)
-    table.add_column("Tip", style="bold cyan")
-    table.add_column("Status", style="white")
-    table.add_column("Napredak", justify="right")
-    table.add_column("Kreirano", style="dim")
+    table.add_column(STRINGS.LABEL_ID, style="dim", width=8)
+    table.add_column(STRINGS.LABEL_TYPE, style="bold cyan")
+    table.add_column(STRINGS.LABEL_STATUS, style="white")
+    table.add_column(STRINGS.LABEL_PROGRESS, justify="right")
+    table.add_column(STRINGS.LABEL_CREATED, style="dim")
     
     for job in job_list:
         status_color = "green" if job['status'] == "completed" else ("red" if job['status'] == "failed" else "yellow")

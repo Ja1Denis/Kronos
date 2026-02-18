@@ -56,6 +56,34 @@ class Strings:
     MSG_CONTRADICTION_FOUND = "CONTRADICTION DETECTED!"
     MSG_NO_CONTRADICTION = "No contradictions detected.\nContent is consistent with knowledge base."
 
+    # Table Labels
+    LABEL_METRIC = "Metric"
+    LABEL_VALUE = "Value"
+    LABEL_CATEGORY = "Category"
+    LABEL_DETAILS = "Details"
+    LABEL_PROJECT = "Project"
+    LABEL_FILES = "Files"
+    LABEL_CHUNKS = "Chunks"
+    LABEL_KNOWLEDGE = "Knowledge (Entities)"
+    LABEL_ID = "ID"
+    LABEL_CONTENT = "Content"
+    LABEL_VALIDITY = "Validity"
+    LABEL_STATUS = "Status"
+    LABEL_TYPE = "Type"
+    LABEL_PROGRESS = "Progress"
+    LABEL_CREATED = "Created"
+    LABEL_RELEVANCE = "Relevance"
+    LABEL_SEARCH_RESULTS = "Search Results: '{query}'"
+    MSG_NO_RESULTS_FOR = "Unfortunately, Kronos found no relevant information for: '{query}'"
+
+    # Metrics names
+    METRIC_TOTAL_FILES = "Total Files"
+    METRIC_TOTAL_CHUNKS = "Total Chunks"
+    METRIC_ENTITIES = "Entities ({type})"
+    METRIC_KNOWLEDGE = "Extracted Knowledge"
+    METRIC_DB_SIZE = "Database Size"
+    METRIC_JOB_QUEUE = "Job Queue"
+
 class EnStrings(Strings):
     """English strings (default)."""
     pass
@@ -117,6 +145,34 @@ class HrStrings(Strings):
     MSG_DECISION_SUPERSEDED = "Odluka #{id} zamijenjena novom (#{new_id})!"
     MSG_CONTRADICTION_FOUND = "DETEKTIRANA KONTRADIKCIJA!"
     MSG_NO_CONTRADICTION = "Nema detektiranih kontradikcija.\nSadržaj je konzistentan s bazom znanja."
+
+    # Table Labels
+    LABEL_METRIC = "Metrika"
+    LABEL_VALUE = "Vrijednost"
+    LABEL_CATEGORY = "Kategorija"
+    LABEL_DETAILS = "Detalji"
+    LABEL_PROJECT = "Projekt"
+    LABEL_FILES = "Files"
+    LABEL_CHUNKS = "Chunks"
+    LABEL_KNOWLEDGE = "Znanje (Entiteti)"
+    LABEL_ID = "ID"
+    LABEL_CONTENT = "Sadržaj"
+    LABEL_VALIDITY = "Vrijedi"
+    LABEL_STATUS = "Status"
+    LABEL_TYPE = "Tip"
+    LABEL_PROGRESS = "Napredak"
+    LABEL_CREATED = "Kreirano"
+    LABEL_RELEVANCE = "Relevantnost"
+    LABEL_SEARCH_RESULTS = "Rezultati pretrage: '{query}'"
+    MSG_NO_RESULTS_FOR = "Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
+
+    # Metrics names
+    METRIC_TOTAL_FILES = "Ukupno datoteka"
+    METRIC_TOTAL_CHUNKS = "Ukupno chunkova"
+    METRIC_ENTITIES = "Entiteti ({type})"
+    METRIC_KNOWLEDGE = "Ekstrahirano Znanje"
+    METRIC_DB_SIZE = "Veličina Baze"
+    METRIC_JOB_QUEUE = "Job Queue"
 
 def get_strings(lang_code: str = 'en') -> Strings:
     """Factory function to get the strings for a specific language."""
