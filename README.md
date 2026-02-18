@@ -155,28 +155,95 @@ The server uses **OS-level stdout hijacking** (`os.dup2`) to prevent communicati
 
 ## 🏁 Quick Start
 
-### 1. Installation
+## 🏁 Quick Start Guide
+
+### 1. Prerequisites
+- **Python 3.10+** needed.
+- **Windows Users**: You might need [Visual Studio C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) for `chromadb`.
+
+### 2. Installation (Standard)
+
+It is **highly recommended** to use a virtual environment to avoid conflicts.
+
 ```powershell
+# 1. Clone repository
 git clone https://github.com/Ja1Denis/Kronos.git
 cd Kronos
+
+# 2. Create Virtual Environment
+python -m venv venv
+
+# 3. Activate Virtual Environment
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Mac/Linux:
+source venv/bin/activate
+
+# 4. Install Dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configuration 🔑
-Add your `GEMINI_API_KEY` to a `.env` file for AI synthesis and embeddings.
+> **🔍 Verification:** Run `python scripts/check_env.py` to verify everything is installed correctly.
 
-### 3. Build Knowledge Graph (v0.6.1)
+### 2. Configuration 🔑
+Create a `.env` file in the root directory (copy from `.env.example` if available) and add your API key:
+```ini
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 3. Build Knowledge Graph (First Run)
+Initialize the project memory:
 ```powershell
 python scripts/build_knowledge_graph.py --path . --project MyProject
 ```
 
 ### 4. Ingestion
+Ingest your codebase into the vector database:
 ```powershell
 python .\ingest_everything.py
 ```
 
-### 5. Usage
-Add `@kronos` to your agent query. Each response will include an **Efficiency Report** showing your ROI.
+### 5. IDE Integration (MCP)
+Add Kronos to your MCP client configuration (e.g., `mcp_config.json` for Antigravity or Claude Desktop).
+
+**Critical:** Point to the python executable *inside your venv*!
+
+```json
+{
+  "mcpServers": {
+    "kronos": {
+      "command": "C:/PATH/TO/Kronos/venv/Scripts/python.exe",
+      "args": ["-u", "C:/PATH/TO/Kronos/src/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "C:/PATH/TO/Kronos",
+        "PYTHONUNBUFFERED": "1" 
+      }
+    }
+  }
+}
+```
+
+### 6. Usage (AI Agents)
+Once the server is running (via MCP in your IDE), you can simply mention `@kronos` in your prompt.
+
+**Example:**
+> "@kronos How does the `Oracle` module handle context ranking?"
+
+Kronos will intercept the request, search its memory, and inject the relevant code/docs into the context *before* the LLM answers.
+
+## ❓ Troubleshooting
+
+### "No module named 'chromadb'" or 'dotenv'
+- **Cause:** The MCP server is likely running with the *system* Python instead of your *virtual environment* Python.
+- **Fix:** In your `mcp_config.json`, change the `"command": "python"` to the absolute path of your venv python: `"C:/Users/.../Kronos/venv/Scripts/python.exe"`.
+
+### "No module named 'FastMCP'"
+- **Cause:** Missing `mcp` package or using an old version.
+- **Fix:** Run `pip install -r requirements.txt` and ensure `mcp>=1.0.0` is installed. Note: `FastMCP` is part of the `mcp` package, not a separate `pip install fastmcp`.
+
+### "SQLite version too old" (chromadb error)
+- **Cause:** Windows often has an old generic SQLite DLL.
+- **Fix:** Install `pysqlite3-binary` and override `sqlite3` in your code, or simply download `sqlite3.dll` from [sqlite.org](https://www.sqlite.org/download.html) and place it in your Python DLLs folder (or strictly use the venv provided one if it's newer).
 
 ---
 
