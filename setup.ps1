@@ -25,5 +25,9 @@ if ($LASTEXITCODE -ne 0) {
 
 pip install -r requirements.txt
 
+# 4. Konfiguracija
+Write-Host "Pokrecem konfiguraciju..." -ForegroundColor Yellow
+python configure.py
+
 Write-Host "Sve gotovo! Okruženje je spremno." -ForegroundColor Green
 Write-Host "Za aktivaciju tipkaj: .\venv\Scripts\Activate.ps1" -ForegroundColor Cyan

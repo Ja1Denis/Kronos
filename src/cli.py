@@ -14,6 +14,7 @@ from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
 from src.modules.job_manager import JobManager
 from src.utils.llm_client import LLMClient
+from src.config import STRINGS
 
 # Tema boja (Cyberpunk vibe)
 custom_theme = Theme({
@@ -26,7 +27,7 @@ custom_theme = Theme({
 })
 
 console = Console(theme=custom_theme)
-app = typer.Typer(help="Kronos: Semantička Memorija za AI Agente", add_completion=False)
+app = typer.Typer(help=STRINGS.APP_HELP, add_completion=False)
 
 @app.command()
 def ingest(
@@ -37,7 +38,7 @@ def ingest(
     """
     Učitava dokumente i stvara semantičku memoriju.
     """
-    console.print(Panel(f"[bold accent]Kronos Ingestor[/] v1.1\n[info]Učitavam iz: {path}[/]", border_style="accent"))
+    console.print(Panel(f"[bold accent]{STRINGS.MSG_INGEST_START.format(path=path)}[/]", border_style="accent"))
 
     ingestor = Ingestor()
     
@@ -58,7 +59,7 @@ def ingest(
         
     console.print("\n")
     console.print(table)
-    console.print(f"\n[bold success]✅ Ingestija završena![/]")
+    console.print(f"\n[bold success]✅ {STRINGS.MSG_INGEST_COMPLETE}[/]")
 
 @app.command()
 def ask(
@@ -77,12 +78,12 @@ def ask(
     results = oracle.ask(query, project=project, limit=limit, silent=True, hyde=hyde, expand=expand)
 
     if not results["entities"] and not results["chunks"]:
-        console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
+        console.print(f"[warning]{STRINGS.MSG_NO_RESULTS}[/]")
         return
 
     # 1. PRIKAZ ENTITETA (Structured Objects)
     if results["entities"]:
-        console.print(f"\n[bold accent]💎 Pronađeni Entiteti ({len(results['entities'])}):[/]")
+        console.print(f"\n[bold accent]💎 {STRINGS.MSG_FOUND_ENTITIES.format(count=len(results['entities']))}[/]")
         for ent in results["entities"]:
             source = ent['metadata'].get('source')
             source_name = os.path.basename(source) if source else "Ručni unos"
@@ -99,7 +100,7 @@ def ask(
 
     # 2. PRIKAZ CHUNKOVA (Evidence)
     if results["chunks"]:
-        header = "\n[bold info]📖 Citati iz dokumenata (Evidence):[/]" if results["entities"] else "\n[header]Pronađeni citati:[/]"
+        header = f"\n[bold info]📖 {STRINGS.MSG_FOUND_QUOTES}[/]" if results["entities"] else "\n[header]Pronađeni citati:[/]"
         console.print(header)
         
         for i, res in enumerate(results["chunks"]):
@@ -248,7 +249,7 @@ def chat(
     status_msg = "[bold green]Live Sync: On[/] | [bold magenta]AI Mode: Active[/]"
     if not use_ai: status_msg = "[bold green]Live Sync: On[/] | [dim]AI: Off (Quotes Only)[/]"
     
-    console.print(Panel(f"[bold accent]Kronos Interaktivni Terminal[/]\n[info]Pitaj me bilo što. Upiši 'exit' za kraj.[/]\n[dim]Komande: /project [ime], /clear, /stats, /exit | {status_msg}[/]", border_style="accent"))
+    console.print(Panel(f"[bold accent]{STRINGS.MSG_WELCOME}[/]\n[dim]{status_msg}[/]", border_style="accent"))
     
     session_project = None
     
@@ -264,29 +265,29 @@ def chat(
         # Komande
         if q_lower in ["exit", "quit", "izlaz", "kraj", "/exit"]:
             watcher.stop()
-            console.print("[yellow]Pozdrav! Kronos se vraća u san...[/]")
+            console.print(f"[yellow]{STRINGS.MSG_GOODBYE}[/]")
             break
             
         if q_lower.startswith("/project"):
             parts = query.split()
             if len(parts) > 1:
                 session_project = parts[1]
-                console.print(f"[success]✅ Projekt postavljen na: [bold green]{session_project}[/][/]")
+                console.print(f"[success]✅ {STRINGS.MSG_PROJECT_SET.format(project=session_project)}[/]")
             else:
                 session_project = None
-                console.print("[info]🔄 Pretraga vraćena na globalnu razinu.[/]")
+                console.print(f"[info]🔄 {STRINGS.MSG_GLOBAL_SEARCH}[/]")
             continue
             
         if q_lower == "/clear":
             os.system('cls' if os.name == 'nt' else 'clear')
-            console.print(Panel("[bold accent]Kronos Interaktivni Terminal[/]", border_style="accent"))
+            console.print(Panel(f"[bold accent]{STRINGS.MSG_WELCOME.splitlines()[0]}[/]", border_style="accent"))
             continue
             
         if q_lower == "/stats":
             stats()
             continue
 
-        with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
+        with console.status(f"[bold magenta]{STRINGS.MSG_KRONOS_THINKING}", spinner="dots8Bit"):
             # 1. Detekcija projekta
             target_project = session_project
             if not session_project:
@@ -309,12 +310,12 @@ def chat(
                 results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde, expand=expand)
 
         if not results["entities"] and not results["chunks"]:
-            console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
+            console.print(f"[warning]{STRINGS.MSG_NO_RESULTS}[/]")
             continue
 
         # 3. AI Generacija Odgovora (RAG)
         if use_ai and llm:
-            with console.status("[bold blue]Sintetiziram odgovor...", spinner="bouncingBar"):
+            with console.status(f"[bold blue]{STRINGS.MSG_SYNTHESIZING}", spinner="bouncingBar"):
                 # Pripremi kontekst
                 context_parts = []
                 for ent in results["entities"]:
@@ -343,7 +344,7 @@ ODGOVOR:"""
                 console.print("[dim]─" * 40 + "[/]")
 
         # 4. Prikaz Izvora (samo kao reference)
-        console.print("\n[dim]🔍 Izvori:[/]")
+        console.print(f"\n[dim]🔍 {STRINGS.MSG_SOURCES}[/]")
         if results["entities"]:
             for ent in results["entities"]:
                 etype = ent['type']
@@ -752,14 +753,14 @@ def wipe(
     Briše svu memoriju i resetira bazu.
     """
     if not force:
-        confirm = typer.confirm("[error]Jesi li siguran da želiš obrisati CIJELU memoriju?[/]", default=False)
+        confirm = typer.confirm(f"[error]{STRINGS.MSG_CONFIRM_WIPE}[/]", default=False)
     else:
         confirm = True
         
     if confirm:
         with console.status("[bold red]Brišem podatke..."):
             Librarian().wipe_all()
-        console.print("[bold green]Memorija je uspješno resetirana.[/]")
+        console.print(f"[bold green]{STRINGS.MSG_MEMORY_RESET}[/]")
     else:
         console.print("[info]Otkazano.[/]")
 

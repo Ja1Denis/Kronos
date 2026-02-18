@@ -85,7 +85,7 @@ Kronos isn't just a tool; it's a methodology. The **Kronos Architect Protocol** 
 4.  **REUSE**: Adapt, don't invent.
 5.  **SYNTHESIS**: Execute with precision.
 
-See [AGENTS.md](AGENTS.md) for the full protocol definition.
+See [AGENTS.md](AGENTS.md) and [docs/skills/SuperpowersDocs.md](docs/skills/SuperpowersDocs.md) for the full protocol definition.
 
 ---
 
@@ -153,42 +153,48 @@ The server uses **OS-level stdout hijacking** (`os.dup2`) to prevent communicati
 
 ---
 
-## 🏁 Quick Start
-
 ## 🏁 Quick Start Guide
 
 ### 1. Prerequisites
 - **Python 3.10+** needed.
 - **Windows Users**: You might need [Visual Studio C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) for `chromadb`.
 
-### 2. Installation (Standard)
+### 2. Installation & Setup
 
-It is **highly recommended** to use a virtual environment to avoid conflicts.
+#### A. Automated Setup (Recommended for Windows)
+Just run the setup script. It will create a virtual environment, install dependencies, and walk you through the language configuration (English/Croatian).
 
 ```powershell
-# 1. Clone repository
+./setup.ps1
+```
+
+#### B. Manual Installation
+If you prefer manual control:
+
+```powershell
+# 1. Clone repository & enter
 git clone https://github.com/Ja1Denis/Kronos.git
 cd Kronos
 
-# 2. Create Virtual Environment
+# 2. Create and activate Virtual Environment
 python -m venv venv
+.\venv\Scripts\Activate.ps1  # Windows
+source venv/bin/activate     # Mac/Linux
 
-# 3. Activate Virtual Environment
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-# Mac/Linux:
-source venv/bin/activate
-
-# 4. Install Dependencies
+# 3. Install Dependencies
 pip install -r requirements.txt
+
+# 4. Configure Language (i18n)
+python configure.py
 ```
 
 > **🔍 Verification:** Run `python scripts/check_env.py` to verify everything is installed correctly.
 
-### 2. Configuration 🔑
-Create a `.env` file in the root directory (copy from `.env.example` if available) and add your API key:
+### 3. API Configuration 🔑
+Create a `.env` file in the root directory (automatically created if you used `setup.ps1`) and add your API key:
 ```ini
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENROUTER_API_KEY=your_key_here
+KRONOS_LANG=en  # Or 'hr' for Croatian
 ```
 
 ### 3. Build Knowledge Graph (First Run)
