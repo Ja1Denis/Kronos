@@ -240,9 +240,14 @@ Kronos will intercept the request, search its memory, and inject the relevant co
 ### 7. Monitoring & Efficiency 📊
 Track your knowledge growth and financial savings at any time:
 
+#### A. Via Terminal (CLI)
 ```powershell
 python -m src.main stats
 ```
+
+#### B. Via AI Agent (MCP)
+If you are using an MCP-compatible IDE (like Cursor or Antigravity), you can simply ask the LLM:
+> "@kronos show me `kronos_stats`"
 
 **Example Output (Power User):**
 ```text
