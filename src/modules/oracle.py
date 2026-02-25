@@ -548,10 +548,10 @@ class Oracle:
                 final_entities = []
                 query_keywords = self.extract_keywords(query)
                 
-                # Pragovi su sada fleksibilniji, pogotovo za temporalne upite
-                chunk_threshold = 0.5 if is_temporal else 0.65
-                pointer_threshold = 0.1 # Vrlo nisko da dobijemo "Project Map"
-                
+                # Pragovi su sada viši kako bi prisilili Agentic Pointers (Late Retrieval)
+                # Samo iznimno visoka podudaranja (>= 0.85) idu direktno kao chunks
+                chunk_threshold = 0.85 if is_temporal else 0.85
+                pointer_threshold = 0.20 # Project Map prag
                 for i, cand in enumerate(unique_candidates):
                     u_score = cand.get('utility_score', 0.0)
                     method = cand.get('method', 'unknown')

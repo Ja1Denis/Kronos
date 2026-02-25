@@ -62,8 +62,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Kronos API", 
-    description="Semantička Memorija za AI Agente", 
-    version="0.2.0",
+    description="Semantička Memorija za AI Agente (Agentic Pointers)", 
+    version="0.3.0",
     lifespan=lifespan
 )
 
@@ -300,7 +300,8 @@ def query_memory(request: QueryRequest):
 
         for p in retrieval_results.get("pointers", []):
              # Pointers represent Project Map / Navigation
-             pointer_text = f"FILE: {p['file_path']}\nSECTION: {p['section']}\nMATCH: {', '.join(p['keywords'])}"
+             lines_str = f"{p.get('line_range', [1, 500])[0]}-{p.get('line_range', [1, 500])[1]}"
+             pointer_text = f"FILE: {p['file_path']} (Lines: {lines_str})\nSECTION: {p['section']}\nMATCH: {', '.join(p['keywords'])}"
              composer.add_item(ContextItem(
                 content=pointer_text,
                 source=p['file_path'],

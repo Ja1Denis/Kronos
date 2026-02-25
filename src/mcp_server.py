@@ -59,10 +59,10 @@ load_dotenv()
 
 # Dodaj root direktorij u path za importanje modula
 # __file__ je src/mcp_server.py, pa ROOT_DIR je parent od src = kronos
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from src.config import STRINGS
 from src.modules.ledger import SavingsLedger
 
 # Inicijaliziraj Ledger
@@ -189,8 +189,8 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
             remaining = 30
             _oracle_init_event.wait(timeout=remaining)
             if not _oracle_ready:
-                err = _oracle_error or "Unknown error (init timeout)"
-                return f"❌ Oracle initialization failed: {err}. Try calling 'kronos_reinit_oracle' or restart Kronos server."
+                err = _oracle_error or "Nepoznata greška (init timeout)"
+                return f"❌ Oracle inicijalizacija nije uspjela: {err}. Pokušaj pozvati 'kronos_reinit_oracle' ili restartaj Kronos server."
         
         oracle = get_oracle()
         
@@ -212,7 +212,7 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
         retrieval_results = oracle.ask(query, limit=limit, silent=True)
         
         if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks')):
-            return STRINGS.MSG_NO_RESULTS_FOR.format(query=query)
+            return f"Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
             
         # 2. Sastavljanje konteksta pomoću Budgetera
         composer = ContextComposer(config=config)
@@ -257,7 +257,7 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
         return main_context + "\n" + efficiency_report
     
     except Exception as e:
-        return f"{STRINGS.ERROR} in kronos_query: {str(e)}"
+        return f"Greška u kronos_query: {str(e)}"
 
 
 @mcp.tool()
@@ -278,9 +278,9 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
         results = oracle.ask(query, project=project, limit=limit, silent=True)
         
         if not results:
-            return f"{STRINGS.MSG_NO_RESULTS} ('{query}')"
+            return f"Nema rezultata za upit: '{query}'"
         
-        output = [f"## {STRINGS.LABEL_SEARCH_RESULTS.format(query=query)}\n"]
+        output = [f"## Rezultati pretrage: '{query}'\n"]
         
         entities = results.get('entities', [])
         chunks = results.get('chunks', [])
@@ -297,8 +297,8 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
             
             relevance = round(score * 100, 1) if score else 0
             
-            output.append(f"### Result {i} [{res_type}] ({STRINGS.LABEL_RELEVANCE}: {relevance}%)")
-            output.append(f"**{STRINGS.MSG_SOURCES.rstrip(':')}:** `{os.path.basename(source)}` | **{STRINGS.LABEL_PROJECT}:** {proj}\n")
+            output.append(f"### Rezultat {i} [{res_type}] (Relevantnost: {relevance}%)")
+            output.append(f"**Izvor:** `{os.path.basename(source)}` | **Projekt:** {proj}\n")
             output.append(f"```\n{content[:500]}{'...' if len(content) > 500 else ''}\n```\n")
         
         return "\n".join(output)
@@ -319,13 +319,13 @@ def kronos_stats() -> str:
         librarian = get_librarian()
         stats = librarian.get_stats()
         
-        output = [f"## 📊 {STRINGS.CMD_STATS_HELP}\n"]
-        output.append(f"| {STRINGS.LABEL_METRIC} | {STRINGS.LABEL_VALUE} |")
+        output = ["## 📊 Kronos Statistika\n"]
+        output.append(f"| Metrika | Vrijednost |")
         output.append(f"|---------|------------|")
-        output.append(f"| **{STRINGS.METRIC_TOTAL_FILES}** | {stats.get('total_files', 0):,} |")
-        output.append(f"| **{STRINGS.METRIC_TOTAL_CHUNKS}** | {stats.get('total_chunks', 0):,} |")
-        output.append(f"| **{STRINGS.METRIC_DB_SIZE} (SQLite)** | {stats.get('db_size_kb', 0):.1f} KB |")
-        output.append(f"| **{STRINGS.METRIC_DB_SIZE} (Chroma)** | {stats.get('chroma_size_kb', 0):.1f} KB |")
+        output.append(f"| **Datoteke** | {stats.get('total_files', 0):,} |")
+        output.append(f"| **Chunkovi** | {stats.get('total_chunks', 0):,} |")
+        output.append(f"| **SQLite veličina** | {stats.get('db_size_kb', 0):.1f} KB |")
+        output.append(f"| **ChromaDB veličina** | {stats.get('chroma_size_kb', 0):.1f} KB |")
         
         entities = stats.get('entities', {})
         if entities:
@@ -340,14 +340,14 @@ def kronos_stats() -> str:
         try:
             jm = get_job_manager()
             jstats = jm.get_job_stats()
-            output.append(f"\n### 🕒 {STRINGS.METRIC_JOB_QUEUE}")
-            output.append(f"| {STRINGS.LABEL_STATUS} | {STRINGS.LABEL_VALUE} |")
+            output.append(f"\n### 🕒 Job Queue")
+            output.append(f"| Status | Broj |")
             output.append(f"|--------|------|")
             for status, count in jstats.get('counts', {}).items():
                 output.append(f"| {status.capitalize()} | {count} |")
-            output.append(f"\n- **Total Jobs:** {jstats['total']}")
+            output.append(f"\n- **Ukupno poslova:** {jstats['total']}")
             output.append(f"- **Success Rate:** {jstats['success_rate']}")
-            output.append(f"- **Average Latency:** {jstats['avg_latency_sec']}")
+            output.append(f"- **Prosječna latencija:** {jstats['avg_latency_sec']}")
         except Exception as e:
             output.append(f"\n*Greška pri dohvaćanju Job Queue stats: {e}*")
             
@@ -355,7 +355,7 @@ def kronos_stats() -> str:
         try:
             lstats = _ledger.get_summary(days=30)
             output.append(f"\n### 💰 Financial Efficiency (Last 30 Days)")
-            output.append(f"| {STRINGS.LABEL_METRIC} | {STRINGS.LABEL_VALUE} |")
+            output.append(f"| Metrika | Vrijednost |")
             output.append(f"|---------|------------|")
             output.append(f"| **Saved Tokens** | {lstats['recent_saved_tokens']:,} |")
             output.append(f"| **Avoided Cost** | **${lstats['recent_usd_saved']:.4f}** |")

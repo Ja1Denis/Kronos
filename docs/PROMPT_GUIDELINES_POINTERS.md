@@ -1,31 +1,32 @@
-# LLM Prompt Guidelines for Kronos Pointer System
+# LLM Prompt Guidelines for Kronos Agentic Pointers
 
-## How to Handle Mixed Responses
+## The "Late Retrieval" Concept
 
-When Kronos returns a `mixed_response` or `pointer_response`, you (the LLM) will see two types of context:
+When Kronos returns contexts, it prioritizes **Agentic Pointers** over full source code to save context window space and reduce hallucinations.
 
-1.  **FULL CHUNKS**: Actual text snippets from files.
-    - Use these directly to answer the question.
-2.  **POINTERS**: References to files and line ranges that were NOT included in the context to save tokens.
-    - Format: `[POINTER] File: path/to/file.py (Lines 10-50) | Keywords: [list] | Section: [title]`
+You (the LLM) will often receive a "Menu" of available snippets rather than the full code.
+Example of a Pointer:
+`--- POINTER (src/auth.py) ---`
+`FILE: src/auth.py`
+`SECTION: def verify_user_token(token: str) -> bool:`
+`MATCH: token, security, verify`
 
-### Decision Logic for LLM
+### Decision Logic for the Agent (YOU)
 
-- **If you can answer fully** using the provided Full Chunks, do so.
-- **If the answer is likely in a Pointer** but NOT in the Full Chunks:
-    - You MUST tell the user you found relevant locations but haven't read them yet.
-    - **Trigger Tool Call**: Ask the user to run `fetch_exact` for those specific pointers.
-    - Example: "I see relevant logic in `main.py` lines 40-80, but I only have the header. Should I fetch it?"
-- **In Mixed Mode**:
-    - Synthesize the answer from Chunks.
-    - Mention Pointers as "Further Reading" or "Potential missing details".
+1.  **Analyze the Menu:** Read the `SECTION` and `MATCH` keywords of the provided Pointers.
+2.  **Determine Relevance:** Does the user's question require the exact code inside one of these pointers?
+    *   **NO:** Answer the user's question directly if you already know the answer.
+    *   **YES:** You **MUST** use the `fetch_exact` tool to read the exact lines of code. Do not hallucinate the contents of the file.
+3.  **Using `fetch_exact`**: 
+    - The tool requires `file_path`, `start_line`, and `end_line`.
+    - However, since Kronos pointers might only give you the file path in the menu, you should supply the `file_path` and a wide range (e.g. `start_line: 1`, `end_line: 500`) to fetch the requested file chunk.
 
 ## System Prompt Snippet (Add to Antigravity)
 
-> "You are an AI assistant with access to Kronos Semantic Memory. 
-> When you receive [POINTER] entries, understand that these are relevant sections of code or documentation that were TOO LARGE to fit in your current context window. 
-> DO NOT hallucinate their content. 
-> If a [POINTER] looks critical to the user's request, use the `fetch_exact` tool to retrieve the missing lines before finalizing your answer."
+> "You are an autonomous AI Agent equipped with Kronos Semantic Memory.
+> You operate on a "Late Retrieval" architecture. Kronos will give you a list of [POINTERS], which act as a menu of available files and sections.
+> YOUR JOB is to read the menu and decide what to open. 
+> DO NOT hallucinate code. If a [POINTER] looks relevant, you MUST independently use the `fetch_exact` tool to read the file before answering the user."
 
 ---
-*Status: Faza 4.2 Integracija*
+*Status: V2 Agentic Integration*
