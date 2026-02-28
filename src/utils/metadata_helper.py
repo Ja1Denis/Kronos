@@ -11,7 +11,12 @@ _curr_file = os.path.abspath(__file__) # .../kronos/src/utils/metadata_helper.py
 _src_utils = os.path.dirname(_curr_file)
 _src = os.path.dirname(_src_utils)
 _kronos = os.path.dirname(_src)
-ALLOWED_ROOT = os.path.dirname(_kronos) # ai-test-project root
+
+# Popravak za Railway/Docker (ako je u Dockeru, dopusti cijeli /app root, inače koristi lokalni root)
+if os.path.exists("/app") and _kronos.startswith("/app"):
+    ALLOWED_ROOT = "/app"
+else:
+    ALLOWED_ROOT = os.path.dirname(_kronos) # ai-test-project root
 
 def is_safe_path(file_path: str, allowed_root: str = ALLOWED_ROOT) -> bool:
     """
