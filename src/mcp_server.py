@@ -343,6 +343,48 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
 
 
 @mcp.tool()
+def kronos_read_file(file_path: str, start_line: int = 1, end_line: int = None) -> str:
+    """
+    Kada ti 'kronos_query' ili 'kronos_search' vrati Pointer (📍 Reference), OBAVEZNO iskoristi ovaj alat 
+    da bi pročitao stvarni kod prije donošenja zaključka.
+    
+    Args:
+        file_path: Putanja do datoteke koju želiš pročitati.
+        start_line: Početna linija (default: 1)
+        end_line: Završna linija. Ako nije zadana, čita cijeli file.
+    
+    Returns:
+        Stvarni izvorni kod iz datoteke s brojevima linija.
+    """
+    try:
+        # Pretvori u apsolutnu putanju
+        full_path = os.path.abspath(os.path.join(ROOT_DIR, file_path))
+        
+        if not os.path.exists(full_path):
+            return f"❌ Greška: Datoteka {file_path} ne postoji."
+            
+        with open(full_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            
+        # Logika za izvlačenje specifičnih linija
+        if end_line is None:
+            end_line = len(lines)
+            
+        start_idx = max(0, start_line - 1)
+        end_idx = min(len(lines), end_line)
+        
+        output = [f"## Kod iz {file_path} (linije {start_line}-{end_line}):\n```python"]
+        for i in range(start_idx, end_idx):
+            output.append(f"{i+1:4d} | {lines[i].rstrip()}")
+        output.append("```")
+        
+        return "\n".join(output)
+        
+    except Exception as e:
+        return f"Greška pri čitanju datoteke: {str(e)}"
+
+
+@mcp.tool()
 def kronos_stats() -> str:
     """
     Dohvati statistiku Kronos baze podataka.
