@@ -211,7 +211,7 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
         # 1. Dohvat kandidata
         retrieval_results = oracle.ask(query, limit=limit, silent=True)
         
-        if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks')):
+        if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks') and not retrieval_results.get('pointers')):
             return f"Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
             
         # 2. Sastavljanje konteksta pomoću Budgetera
@@ -233,6 +233,26 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
                 content=c['content'],
                 source=c.get('metadata', {}).get('source', 'Unknown'),
                 utility_score=c.get('score', 0.5)
+            ))
+            
+        # Dodaj pointere (Agentic Mode)
+        for p in retrieval_results.get('pointers', []):
+            # p je dict serijaliziran iz Pointer objekta, formatirajmo ga priručno
+            file_path = p.get('file_path', 'Unknown')
+            section = p.get('section', 'Untitled')
+            lines = f"{p.get('line_range', [0,0])[0]}-{p.get('line_range', [0,0])[1]}"
+            kw_str = ", ".join(p.get('keywords', []))
+            
+            p_content = (f"📍 Reference: {file_path} (Lines: {lines})\n"
+                         f"   Section: {section}\n"
+                         f"   Keywords: {kw_str}\n"
+                         f"   Confidence: {p.get('confidence', 0.0):.2f}")
+                         
+            composer.add_item(ContextItem(
+                kind="pointer",
+                content=p_content,
+                source=file_path,
+                utility_score=p.get('confidence', 0.5)
             ))
             
         # 3. Finalni formatirani odgovor
@@ -284,6 +304,7 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
         
         entities = results.get('entities', [])
         chunks = results.get('chunks', [])
+        pointers = results.get('pointers', [])
         
         all_res = entities + chunks
         
@@ -300,6 +321,20 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
             output.append(f"### Rezultat {i} [{res_type}] (Relevantnost: {relevance}%)")
             output.append(f"**Izvor:** `{os.path.basename(source)}` | **Projekt:** {proj}\n")
             output.append(f"```\n{content[:500]}{'...' if len(content) > 500 else ''}\n```\n")
+            
+        # Dodaj prikaz pointera
+        if pointers:
+            output.append(f"\n## 📍 Pronađeni Pokazivači (Agentic Pointers) ({len(pointers)})\n")
+            for j, p in enumerate(pointers, 1):
+                file_path = p.get('file_path', 'Nepoznato')
+                sec = p.get('section', 'Untitled')
+                lines = f"{p.get('line_range', [0,0])[0]}-{p.get('line_range', [0,0])[1]}"
+                rel = round(p.get('confidence', 0) * 100, 1)
+                
+                output.append(f"### Pokazivač {j} (Relevantnost: {rel}%)")
+                output.append(f"- **Izvor:** `{os.path.basename(file_path)}` (Linije: {lines})")
+                output.append(f"- **Sekcija:** {sec}")
+                output.append(f"- **Ključne riječi:** {', '.join(p.get('keywords', []))}\n")
         
         return "\n".join(output)
     
