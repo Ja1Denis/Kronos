@@ -19,8 +19,8 @@ We are currently in the process of transitioning all codebase comments and inter
 
 ## 💰 Token Efficiency - The Kronos Advantage
 
-### Why are "Pointers" important?
-Traditional RAG systems send **entire document blocks** to your LLM, consuming huge amounts of tokens. Kronos instead sends **lightweight pointers**, allowing the AI to decide what it actually needs.
+### State-of-the-Art: Agentic Pointers (Small-to-Big Retrieval)
+Traditional RAG systems send **entire document blocks** to your LLM, consuming huge amounts of tokens and often causing the "Lost in the Middle" problem. Kronos instead employs advanced **Agentic Retrieval Protocols**. It sends **lightweight pointers** (summaries with exact line numbers) to your AI agent, allowing the LLM to decide what it actually needs to read via its own tool-calling (**Late Retrieval**).
 
 ### Visual Comparison
 ```text
@@ -31,13 +31,13 @@ Traditional RAG systems send **entire document blocks** to your LLM, consuming h
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Kronos Pointers (Metadata only)                             │
+│ Kronos Agentic Pointers (Actionable Structure)              │
 │ ██ 300 tokens                                               │
 │ Cost: $0.00042 per query                                    │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Kronos Smart Fetch (Pointers + Selective Content)           │
+│ Agent Late Retrieval (Pointers + Specifically Read Content) │
 │ ████████ 2,500 tokens                                       │
 │ Cost: $0.0035 per query                                     │
 └─────────────────────────────────────────────────────────────┘
@@ -49,20 +49,21 @@ Traditional RAG systems send **entire document blocks** to your LLM, consuming h
 ### Real-world Cost Calculation
 Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
-| Monthly Volume    | Traditional RAG | Kronos (Pointers only) | Kronos (Smart Fetch) | Annual Savings  |
-|-------------------|-----------------|------------------------|----------------------|-----------------|
-| **1,000 queries**  | $15.00          | $0.30                  | $2.50                | **$150-176**    |
-| **10,000 queries** | $150.00         | $3.00                  | $25.00               | **$1,500-1,764**|
-| **100,000 queries**| $1,500.00       | $30.00                 | $250.00              | **$15,000-17,640**|
+| Monthly Volume    | Traditional RAG | Agentic Pointers | Late Retrieval | Annual Savings  |
+|-------------------|-----------------|------------------|----------------|-----------------|
+| **1,000 queries**  | $15.00          | $0.30            | $2.50          | **$150-176**    |
+| **10,000 queries** | $150.00         | $3.00            | $25.00         | **$1,500-1,764**|
+| **100,000 queries**| $1,500.00       | $30.00           | $250.00        | **$15,000-17,640**|
 
-<sub>*Calculated with 15k tokens/query (RAG), 300 tokens/query (Pointer), 2.5k tokens/query (Smart Fetch)*</sub>
+<sub>*Calculated with 15k tokens/query (RAG), 300 tokens/query (Pointers), 2.5k tokens/query (Late Retrieval)*</sub>
 
 💡 **Break-even point: ~500 queries** (Kronos pays for itself in days, not months!)
 
 ---
 
-## ✨ Key Features (v0.6.1)
+## ✨ Key Features (v0.6.2)
 
+- 🎯 **Agentic Pointers (Small-to-Big Retrieval)**: Prevents "Lost in the Middle" syndrome by providing AI agents with an *Actionable Structure* (file lines and summaries) instead of raw text dumps.
 - 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage. Enables cross-project pattern matching and knowledge reuse.
 - 🚀 **Multi-Agent Scaling**: Server-client architecture via **SSE transport**. Multiple IDE instances (VS Code, Cursor, Antigravity) can share the same memory without "database locked" errors.
 - ⚡ **Rust Fast-Path (L0/L1)**: Ultra-fast literal match search implemented in Rust (**< 1ms**).
@@ -71,7 +72,7 @@ Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 - 🔍 **Hybrid Search**: Combination of Vector search (ChromaDB) and precise FTS5 keyword search (SQLite).
 - ⚖️ **Temporal Truth**: Tracks decision evolution over time (`valid_from`, `valid_to`).
 - 📂 **Project Awareness**: Automatic knowledge isolation and filtering per project.
-- 🛠️ **Smart Fetching**: AI independently requests exact code lines only when needed.
+- 🛠️ **Late Retrieval**: Real-time cooperation where AI dynamically fetches precise code lines through explicit `read_file` tools based on Oracle's initial lightweight pointers.
 
 ---
 
