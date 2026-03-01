@@ -27,15 +27,6 @@ class Librarian:
         # Inicijalizacija
         self._init_sqlite()
         
-    def _get_sqlite_conn(self):
-        """Vraća SQLite konekciju s WAL modom i timeoutom."""
-        conn = sqlite3.connect(self.meta_path, timeout=30)
-        try:
-            conn.execute("PRAGMA journal_mode=WAL")
-        except:
-            pass
-        return conn
-        
         # Učitaj varijable za Gemini embeddings
         from dotenv import load_dotenv
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,15 +46,28 @@ class Librarian:
 
         # Chroma se inicijalizira lazy (na prvi poziv)
         self.chroma_client = None
+        
+    def _get_sqlite_conn(self):
+        """Vraća SQLite konekciju s WAL modom i timeoutom."""
+        conn = sqlite3.connect(self.meta_path, timeout=30)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+        except:
+            pass
+        return conn
 
     def _get_collection(self):
         """Helper za dohvat ChromaDB kolekcije."""
         if not self.chroma_client:
             self.chroma_client = chromadb.PersistentClient(path=self.store_path)
-        return self.chroma_client.get_or_create_collection(
-            name="kronos_memory",
-            embedding_function=self.embedding_function
-        )
+        
+        # Ako imamo custom embedding function (npr. Gemini), koristi je.
+        # Inače, ChromaDB koristi default model (all-MiniLM-L6-v2).
+        kwargs = {"name": "kronos_memory"}
+        if self.embedding_function is not None:
+            kwargs["embedding_function"] = self.embedding_function
+            
+        return self.chroma_client.get_or_create_collection(**kwargs)
 
     def _index_entity(self, eid, etype, content, project=None, source=None):
         """Indeksira entitet u ChromaDB za semantičku pretragu."""

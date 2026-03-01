@@ -82,10 +82,12 @@ class Oracle:
                 else:
                     raise e
 
-        self.collection = self.client.get_or_create_collection(
-            name="kronos_memory",
-            embedding_function=self.embedding_function
-        )
+        # Ako imamo custom embedding function (Gemini), koristi je.
+        # Inače, ChromaDB koristi default model (all-MiniLM-L6-v2).
+        collection_kwargs = {"name": "kronos_memory"}
+        if self.embedding_function is not None:
+            collection_kwargs["embedding_function"] = self.embedding_function
+        self.collection = self.client.get_or_create_collection(**collection_kwargs)
         
         from src.modules.librarian import Librarian
         self.librarian = Librarian()
@@ -503,8 +505,10 @@ class Oracle:
 
                 # DEFENSE: Check candidates validity
                 if not all_candidates:
-                    if not silent: print(f"{Fore.YELLOW}WARNING: No candidates found for query.{Style.RESET_ALL}")
+                    if not silent: print(f"{Fore.YELLOW}WARNING: No candidates found for query '{query}'.{Style.RESET_ALL}")
                     return self._empty_response("No relevant information found.")
+                else:
+                    if not silent: print(f"{Fore.CYAN}DEBUG: Oracle.ask() found {len(all_candidates)} candidates initially.{Style.RESET_ALL}")
 
                 # 4. Deduplikacija i RANGIRANJE (Temporal Tuning)
                 seen_ids = set()
@@ -542,6 +546,8 @@ class Oracle:
                         unique_candidates.append(cand)
                         seen_ids.add(cid)
                 
+                if not silent: print(f"{Fore.CYAN}DEBUG: Oracle.ask() has {len(unique_candidates)} unique candidates.{Style.RESET_ALL}")
+                
                 # 5. Decision Tree / Classification (Project Map Logic)
                 final_chunks = []
                 final_pointers = []
@@ -555,6 +561,8 @@ class Oracle:
                 for i, cand in enumerate(unique_candidates):
                     u_score = cand.get('utility_score', 0.0)
                     method = cand.get('method', 'unknown')
+                    
+                    if not silent: print(f"{Fore.CYAN}DEBUG: Candidate '{cand.get('id')}' Score={u_score:.3f} Method={method}{Style.RESET_ALL}")
                     
                     if method == 'Entity':
                         final_entities.append(cand)
@@ -570,6 +578,8 @@ class Oracle:
 
                 # 6. Clustering i Finalni odgovor
                 final_pointers = self.cluster_pointers(final_pointers)
+                
+                if not silent: print(f"{Fore.CYAN}DEBUG: Result summary -> {len(final_chunks)} chunks, {len(final_pointers)} pointers, {len(final_entities)} entities.{Style.RESET_ALL}")
 
                 if final_chunks or final_pointers or final_entities:
                     if final_chunks and final_pointers:
@@ -604,6 +614,7 @@ class Oracle:
                     if project:
                         return self.ask(query, project=None, limit=limit, silent=silent)
                     
+                    if not silent: print(f"{Fore.YELLOW}DEBUG: Returning empty response because all results fell under similarity threshold.{Style.RESET_ALL}")
                     resp = self._empty_response("No relevant information found.")
 
                 # Add extra fields for debugging/backward compatibility

@@ -18,10 +18,16 @@ if os.path.exists("/app") and _kronos.startswith("/app"):
 else:
     ALLOWED_ROOT = os.path.dirname(_kronos) # ai-test-project root
 
+# Podrška za dodatne dozvoljene root putanje putem env varijable
+# Primjer: KRONOS_ALLOWED_ROOTS=E:\M;E:\Projects
+_extra_roots = os.getenv("KRONOS_ALLOWED_ROOTS", "")
+ALLOWED_ROOTS = [ALLOWED_ROOT] + [r.strip() for r in _extra_roots.split(";") if r.strip()]
+
 def is_safe_path(file_path: str, allowed_root: str = ALLOWED_ROOT) -> bool:
     """
     SECURITY: Prevents path traversal attacks.
     Provjerava je li putanja unutar dozvoljenog korijenskog direktorija.
+    Podržava provjeru protiv svih ALLOWED_ROOTS.
     """
     if not file_path or not isinstance(file_path, str):
         return False
@@ -34,17 +40,26 @@ def is_safe_path(file_path: str, allowed_root: str = ALLOWED_ROOT) -> bool:
         # Normalize and resolve
         normalized_path = os.path.normpath(file_path)
         
-        # Ako je apsolutna putanja, mora početi sa allowed_root
+        # Provjeri sve dozvoljene root putanje
+        roots_to_check = ALLOWED_ROOTS if allowed_root == ALLOWED_ROOT else [allowed_root]
+        
         if os.path.isabs(normalized_path):
-            if not normalized_path.lower().startswith(os.path.abspath(allowed_root).lower()):
+            path_ok = any(
+                normalized_path.lower().startswith(os.path.abspath(root).lower())
+                for root in roots_to_check
+            )
+            if not path_ok:
                 return False
         else:
-            # Relativna putanja - resolve-aj u apsolutnu i provjeri
             abs_path = os.path.abspath(normalized_path)
-            if not abs_path.lower().startswith(os.path.abspath(allowed_root).lower()):
+            path_ok = any(
+                abs_path.lower().startswith(os.path.abspath(root).lower())
+                for root in roots_to_check
+            )
+            if not path_ok:
                 return False
                 
-        # Dodatna provjera za '..' nakon normalizacije (os.path.normpath rješava većinu)
+        # Dodatna provjera za '..' nakon normalizacije
         if ".." in normalized_path.split(os.sep):
             return False
             

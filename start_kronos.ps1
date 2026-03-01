@@ -50,6 +50,7 @@ if ($existingProcess) {
 # Set environment
 $env:PYTHONPATH = $KronosRoot
 $env:KRONOS_PORT = $Port
+$env:KRONOS_ALLOWED_ROOTS = "E:\M"  # Dozvoljava indeksiranje projekata s E:\M diska
 
 # Start server
 Set-Location $KronosRoot
