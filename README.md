@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: v0.6.1](https://img.shields.io/badge/Status-v0.6.1--Stable-orange.svg)]()
+[![Status: v2.1.0](https://img.shields.io/badge/Status-v2.1.0--Stable-orange.svg)]()
 
 Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
@@ -140,7 +140,8 @@ Kronos supports the **Model Context Protocol**. Configure your IDE (e.g., Gemini
       "args": ["-u", "C:/PATH/TO/KRONOS/src/mcp_server.py"],
       "env": {
         "PYTHONPATH": "C:/PATH/TO/KRONOS",
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "KRONOS_ALLOWED_ROOTS": "C:/PATH/TO/YOUR/PROJECTS;D:/ANOTHER/DRIVE"
       }
     }
   }
@@ -223,7 +224,8 @@ Add Kronos to your MCP client configuration (e.g., `mcp_config.json` for Antigra
       "args": ["-u", "C:/PATH/TO/Kronos/src/mcp_server.py"],
       "env": {
         "PYTHONPATH": "C:/PATH/TO/Kronos",
-        "PYTHONUNBUFFERED": "1" 
+        "PYTHONUNBUFFERED": "1",
+        "KRONOS_ALLOWED_ROOTS": "C:/PATH/TO/YOUR/PROJECTS;D:/ANOTHER/DRIVE"
       }
     }
   }
