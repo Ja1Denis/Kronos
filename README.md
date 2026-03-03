@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: v2.1.0](https://img.shields.io/badge/Status-v2.1.0--Stable-orange.svg)]()
+[![Status: v0.6.2](https://img.shields.io/badge/Status-v0.6.2--Stable-orange.svg)]()
 
 Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
@@ -19,8 +19,8 @@ We are currently in the process of transitioning all codebase comments and inter
 
 ## 💰 Token Efficiency - The Kronos Advantage
 
-### State-of-the-Art: Agentic Pointers (Small-to-Big Retrieval)
-Traditional RAG systems send **entire document blocks** to your LLM, consuming huge amounts of tokens and often causing the "Lost in the Middle" problem. Kronos instead employs advanced **Agentic Retrieval Protocols**. It sends **lightweight pointers** (summaries with exact line numbers) to your AI agent, allowing the LLM to decide what it actually needs to read via its own tool-calling (**Late Retrieval**).
+### Why are "Pointers" important?
+Traditional RAG systems send **entire document blocks** to your LLM, consuming huge amounts of tokens. Kronos instead sends **lightweight pointers**, allowing the AI to decide what it actually needs.
 
 ### Visual Comparison
 ```text
@@ -31,13 +31,13 @@ Traditional RAG systems send **entire document blocks** to your LLM, consuming h
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Kronos Agentic Pointers (Actionable Structure)              │
+│ Kronos Pointers (Metadata only)                             │
 │ ██ 300 tokens                                               │
 │ Cost: $0.00042 per query                                    │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ Agent Late Retrieval (Pointers + Specifically Read Content) │
+│ Kronos Smart Fetch (Pointers + Selective Content)           │
 │ ████████ 2,500 tokens                                       │
 │ Cost: $0.0035 per query                                     │
 └─────────────────────────────────────────────────────────────┘
@@ -49,30 +49,29 @@ Traditional RAG systems send **entire document blocks** to your LLM, consuming h
 ### Real-world Cost Calculation
 Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
-| Monthly Volume    | Traditional RAG | Agentic Pointers | Late Retrieval | Annual Savings  |
-|-------------------|-----------------|------------------|----------------|-----------------|
-| **1,000 queries**  | $15.00          | $0.30            | $2.50          | **$150-176**    |
-| **10,000 queries** | $150.00         | $3.00            | $25.00         | **$1,500-1,764**|
-| **100,000 queries**| $1,500.00       | $30.00           | $250.00        | **$15,000-17,640**|
+| Monthly Volume    | Traditional RAG | Kronos (Pointers only) | Kronos (Smart Fetch) | Annual Savings  |
+|-------------------|-----------------|------------------------|----------------------|-----------------|
+| **1,000 queries**  | $15.00          | $0.30                  | $2.50                | **$150-176**    |
+| **10,000 queries** | $150.00         | $3.00                  | $25.00               | **$1,500-1,764**|
+| **100,000 queries**| $1,500.00       | $30.00                 | $250.00              | **$15,000-17,640**|
 
-<sub>*Calculated with 15k tokens/query (RAG), 300 tokens/query (Pointers), 2.5k tokens/query (Late Retrieval)*</sub>
+<sub>*Calculated with 15k tokens/query (RAG), 300 tokens/query (Pointer), 2.5k tokens/query (Smart Fetch)*</sub>
 
 💡 **Break-even point: ~500 queries** (Kronos pays for itself in days, not months!)
 
 ---
 
-## ✨ Key Features (v0.6.2)
+## ✨ Key Features (v0.6.1)
 
-- 🎯 **Agentic Pointers (Small-to-Big Retrieval)**: Prevents "Lost in the Middle" syndrome by providing AI agents with an *Actionable Structure* (file lines and summaries) instead of raw text dumps.
-- 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage. Enables cross-project pattern matching and knowledge reuse.
-- 🚀 **Multi-Agent Scaling**: Server-client architecture via **SSE transport**. Multiple IDE instances (VS Code, Cursor, Antigravity) can share the same memory without "database locked" errors.
-- ⚡ **Rust Fast-Path (L0/L1)**: Ultra-fast literal match search implemented in Rust (**< 1ms**).
+- 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage with **Hybrid Rust/Python** optimization. 
+- 🚀 **Smart Router Arhitektura**: Inteligentno prebacivanje između Python i Rust motora ovisno o težini upita.
+- ⚡ **Rust Fast-Path & Traversal (v0.6.2)**: Ultra-brza pretraga i graf traverzala u Rustu s Recursive CTE optimizacijom (**< 1ms** za entitete).
 - 🛡️ **MCP IDE Integration**: Native stdio/SSE communication for Windows agents. Includes "Zero-Pollution" stdout shielding for maximum stability.
 - 📉 **Shadow Accounting**: Built-in tracking of actual token and money savings reported in every AI response.
 - 🔍 **Hybrid Search**: Combination of Vector search (ChromaDB) and precise FTS5 keyword search (SQLite).
 - ⚖️ **Temporal Truth**: Tracks decision evolution over time (`valid_from`, `valid_to`).
 - 📂 **Project Awareness**: Automatic knowledge isolation and filtering per project.
-- 🛠️ **Late Retrieval**: Real-time cooperation where AI dynamically fetches precise code lines through explicit `read_file` tools based on Oracle's initial lightweight pointers.
+- 🛠️ **Smart Fetching**: AI independently requests exact code lines only when needed.
 
 ---
 
@@ -140,8 +139,7 @@ Kronos supports the **Model Context Protocol**. Configure your IDE (e.g., Gemini
       "args": ["-u", "C:/PATH/TO/KRONOS/src/mcp_server.py"],
       "env": {
         "PYTHONPATH": "C:/PATH/TO/KRONOS",
-        "PYTHONUNBUFFERED": "1",
-        "KRONOS_ALLOWED_ROOTS": "C:/PATH/TO/YOUR/PROJECTS;D:/ANOTHER/DRIVE"
+        "PYTHONUNBUFFERED": "1"
       }
     }
   }
@@ -224,8 +222,7 @@ Add Kronos to your MCP client configuration (e.g., `mcp_config.json` for Antigra
       "args": ["-u", "C:/PATH/TO/Kronos/src/mcp_server.py"],
       "env": {
         "PYTHONPATH": "C:/PATH/TO/Kronos",
-        "PYTHONUNBUFFERED": "1",
-        "KRONOS_ALLOWED_ROOTS": "C:/PATH/TO/YOUR/PROJECTS;D:/ANOTHER/DRIVE"
+        "PYTHONUNBUFFERED": "1" 
       }
     }
   }
@@ -274,9 +271,13 @@ If you are using an MCP-compatible IDE (like Cursor or Antigravity), you can sim
 
 ## ❓ Troubleshooting
 
-### "No module named 'chromadb'" or 'dotenv'
-- **Cause:** The MCP server is likely running with the *system* Python instead of your *virtual environment* Python.
-- **Fix:** In your `mcp_config.json`, change the `"command": "python"` to the absolute path of your venv python: `"C:/Users/.../Kronos/venv/Scripts/python.exe"`.
+### MCP Error: "EOF" or "Connection Closed" (cortex_step_type_mcp_tool)
+- **Symptom:** Your IDE (like Gemini CLI or Cursor) reports an EOF error and closes the connection as soon as you try to run any tool (like `kronos_query`).
+- **Cause:** The IDE is silently crashing because it is trying to run Kronos with the global, system-wide `python` instead of your virtual environment. The global Python likely lacks critical dependencies (e.g., `chromadb`), crashing the server immediately before it can report a meaningful error.
+- **Fix:** In your `mcp_config.json` (or IDE settings), change the `"command": "python"` line to use the **absolute path of your venv python**.
+  ```json
+  "command": "C:/absolute/path/to/Kronos/venv/Scripts/python.exe"
+  ```
 
 ### "No module named 'FastMCP'"
 - **Cause:** Missing `mcp` package or using an old version.
