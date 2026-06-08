@@ -15,15 +15,17 @@ class NotificationManager:
         if cls._instance is None:
             cls._instance = super(NotificationManager, cls).__new__(cls)
             cls._instance.subscribers: List[asyncio.Queue] = []
+            cls._instance.loop = None
         return cls._instance
 
     async def subscribe(self):
         """
         Kreira novi red čekanja za klijenta i vraća generator stream.
         """
+        self.loop = asyncio.get_running_loop()
         queue = asyncio.Queue()
         self.subscribers.append(queue)
-        logger.info(f"📡 Novi SSE klijent spojen. Ukupno: {len(self.subscribers)}")
+        logger.info(f"📡 Novi SSE klijent spojen (Loop: {id(self.loop)}). Ukupno: {len(self.subscribers)}")
         
         try:
             while True:
@@ -35,13 +37,18 @@ class NotificationManager:
             self.subscribers.remove(queue)
             logger.info(f"🔌 SSE klijent odspojen. Ukupno: {len(self.subscribers)}")
 
+    def broadcast_sync(self, event: str, data: Dict[str, Any]):
+        """
+        Thread-safe slanje poruke svim aktivnim pretplatnicima iz sinkronog koda.
+        """
+        if not self.subscribers or not self.loop:
+            return
+
+        asyncio.run_coroutine_threadsafe(self.broadcast(event, data), self.loop)
+
     async def broadcast(self, event: str, data: Dict[str, Any]):
         """
         Šalje poruku svim aktivnim pretplatnicima.
-        
-        Args:
-            event: Naziv događaja (npr. "log", "job_update", "suggestion")
-            data: Podaci događaja (JSON serializable)
         """
         if not self.subscribers:
             return

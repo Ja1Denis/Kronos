@@ -130,17 +130,28 @@ class ContextComposer:
         self.config = config
         self.items: List[ContextItem] = []
         self.audit_log: List[str] = []
-        self.model_name = model_name.lower()
+        self.model_name = self._normalize_model_name(model_name)
         
-        # Pricing mapping (USD per 1M tokens) - 2026 estimates
+        # Pricing mapping (USD per 1M tokens) - February 2026 Official
+        # Format: { "model-name": { "input": 2.00, "output": 12.00 } }
         self.pricing = {
-            "gemini-3-flash": 0.10,
-            "gemini-3-pro": 1.25,
-            "gemini-2-flash": 0.15,
-            "claude-3.5-sonnet": 3.00,
-            "claude-3-opus": 15.00,
-            "gpt-4o": 5.00,
-            "default": 0.15
+            # Google Gemini Series
+            "gemini-3-flash":    {"input": 0.50, "output": 3.00},
+            "gemini-3-pro":      {"input": 2.00, "output": 12.00},
+            
+            # Anthropic Claude Series
+            "claude-sonnet-4.5": {"input": 3.00, "output": 15.00},
+            "claude-sonnet-4.6": {"input": 3.00, "output": 15.00},
+            "claude-opus-4.6":   {"input": 5.00, "output": 25.00},
+            "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+
+            # Open Source / Hosted
+            "gpt-oss-120b":      {"input": 0.15, "output": 0.60},
+            
+            # Fallbacks / Legacy
+            "gemini-2-flash":    {"input": 0.15, "output": 0.60},
+            "gpt-4o":            {"input": 5.00, "output": 15.00},
+            "default":           {"input": 0.50, "output": 3.00}
         }
         
         # State tracking during composition
@@ -156,6 +167,29 @@ class ContextComposer:
         
         # Savings Metrics
         self.potential_tokens = 0 # What a "dumb" RAG would send
+    
+    def _normalize_model_name(self, name: str) -> str:
+        """Normalizes complex model names (e.g. 'Claude Sonnet 4.5 (Thinking)') to keys."""
+        if not name: return "default"
+        
+        # Lowercase and remove common suffixes/prefixes
+        base = name.lower()
+        base = base.replace(" (thinking)", "").replace(" (high)", "").replace(" (low)", "").replace(" (medium)", "")
+        base = base.replace(" ", "-")
+        
+        # Direct mapping fixes
+        if "gemini-3-pro" in base: return "gemini-3-pro"
+        if "gemini-3-flash" in base: return "gemini-3-flash"
+        if "sonnet-4.5" in base: return "claude-sonnet-4.5"
+        if "sonnet-4.6" in base: return "claude-sonnet-4.6"
+        if "opus-4.6" in base: return "claude-opus-4.6"
+        if "gpt-oss-120b" in base: return "gpt-oss-120b"
+        
+        return base
+
+    def get_price_for_model(self, model: str) -> dict:
+        """Returns pricing dict for model (with fallback)."""
+        return self.pricing.get(model, self.pricing["default"])
 
     def add_item(self, item: ContextItem):
         self.items.append(item)
@@ -278,9 +312,11 @@ class ContextComposer:
         saved = max(0, self.potential_tokens - actual)
         efficiency = (saved / self.potential_tokens * 100) if self.potential_tokens > 0 else 0
         
-        # Dinamička procijenu cijene bazirana na modelu
-        price_per_m = self.pricing.get(self.model_name, self.pricing["default"])
-        usd_saved = (saved / 1_000_000) * price_per_m
+        # Dinamička procijenu cijene bazirana na modelu (INPUT Tokens)
+        price_dict = self.get_price_for_model(self.model_name)
+        input_price = price_dict.get("input", 0.15)
+        
+        usd_saved = (saved / 1_000_000) * input_price
         
         report = "\n---\n"
         report += f"### 🛡️ Kronos Efficiency Report ({self.model_name.upper()} Optimized)\n"

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="hr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kronos Command Center</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Force Graph (D3) -->
+  <script src="https://unpkg.com/force-graph"></script>
+  <style>
+    :root {
+      --bg-color: #0b0e14;
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --accent-blue: #00d2ff;
+      --accent-purple: #a100ff;
+      --text-primary: #ffffff;
+      --text-secondary: #b0b3b8;
+      --success: #00ff88;
+      --warning: #ffaa00;
+      --error: #ff4444;
+      --glass-blur: blur(12px);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background: var(--bg-color);
+      background-image:
+        radial-gradient(circle at 0% 0%, rgba(0, 210, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(161, 0, 255, 0.05) 0%, transparent 40%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Veca citljivost za force-graph tooltipe koji se pojave kada misem predemo preko cvora */
+    .scene-tooltip {
+      font-size: 28px !important;
+      font-weight: 600 !important;
+      background-color: rgba(20, 24, 31, 0.95) !important;
+      border: 1px solid var(--accent-blue) !important;
+      border-radius: 8px !important;
+      padding: 10px 14px !important;
+      color: #fff !important;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
+      /* Ovdje guramo tooltip 60-70 piksela prema GORE y osi i centiramo po x osi iznad miša */
+      transform: translate(-50%, -85px) !important;
+      pointer-events: none;
+    }
+
+    /* App Layout */
+    .app-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 350px;
+      height: 100vh;
+      gap: 1px;
+      background: var(--card-border);
+    }
+
+    /* Sidebar & Panels */
+    .panel {
+      background: var(--bg-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 24px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      color: var(--accent-blue);
+      animation: pulse 2s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from {
+        filter: drop-shadow(0 0 2px var(--accent-blue));
+      }
+
+      to {
+        filter: drop-shadow(0 0 8px var(--accent-blue));
+      }
+    }
+
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      padding: 24px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      border-radius: 16px;
+      backdrop-filter: var(--glass-blur);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--accent-blue);
+    }
+
+    .stat-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #fff, var(--text-secondary));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Live Feed */
+    .live-feed {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      padding: 15px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      height: 100%;
+    }
+
+    .log-entry {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .log-time {
+      color: var(--text-secondary);
+      margin-right: 8px;
+    }
+
+    .log-level-info {
+      color: var(--accent-blue);
+      font-weight: bold;
+    }
+
+    .log-level-job {
+      color: var(--success);
+      font-weight: bold;
+    }
+
+    .log-level-warn {
+      color: var(--warning);
+      font-weight: bold;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateX(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    /* Job Cards */
+    .job-card {
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 4px solid var(--accent-blue);
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 4px 12px 12px 4px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    /* Buttons */
+    .btn {
+      background: var(--accent-blue);
+      color: var(--bg-color);
+      border: none;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+      transform: scale(1.02);
+      box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-primary);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--accent-blue);
+      background: rgba(0, 210, 255, 0.05);
+    }
+
+    /* Table Styles */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .data-table th {
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    .data-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      background: rgba(161, 0, 255, 0.1);
+      color: var(--accent-purple);
+      border: 1px solid rgba(161, 0, 255, 0.2);
+    }
+
+    .view-container {
+      display: none;
+    }
+
+    .view-container.active {
+      display: block;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="panel">
+      <div class="header">
+        <i data-lucide="zap" class="logo-icon"></i>
+        <h1 style="font-size: 18px; letter-spacing: 1px;">KRONOS <span
+            style="font-weight: 300; opacity: 0.7;">Center</span></h1>
+      </div>
+      <div class="scroll-area">
+        <nav>
+          <div
+            style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 2px;">
+            Navigacija</div>
+          <button id="nav-dashboard" class="btn" style="width: 100%; margin-bottom: 10px;">
+            <i data-lucide="layout"></i> Dashboard
+          </button>
+          <button id="nav-knowledge" class="btn btn-outline" style="width: 100%; margin-bottom: 10px;">
+            <i data-lucide="database"></i> Baza Znanja
+          </button>
+          <button id="nav-agentic-logs" class="btn btn-outline" style="width: 100%; margin-bottom: 10px;">
+            <i data-lucide="cpu"></i> Agentic Logs
+          </button>
+          <button id="nav-graph" class="btn btn-outline" style="width: 100%; margin-bottom: 10px;">
+            <i data-lucide="share-2"></i> Micelij (Graf)
+          </button>
+        </nav>
+
+        <div style="margin-top: 40px;">
+          <div
+            style="color: var(--text-secondary); font-size: 11px; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 2px;">
+            Akcije</div>
+          <button class="btn btn-outline" id="btn-reindex" style="width: 100%; margin-bottom: 10px;">
+            <i data-lucide="refresh-cw"></i> Reindeksiraj Sve
+          </button>
+        </div>
+      </div>
+
+      <div
+        style="padding: 20px; border-top: 1px solid var(--card-border); font-size: 12px; color: var(--text-secondary); text-align: center;">
+        v0.6.2-rust-hybrid | 🛰️ Local Cloud
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="panel" style="border-right: 1px solid var(--card-border); border-left: 1px solid var(--card-border);">
+      <header class="header">
+        <div style="flex: 1;">
+          <h2 style="font-size: 24px;">Dobrodošao natrag, Denis</h2>
+          <p style="color: var(--text-secondary); font-size: 14px;">Sustav je optimiziran. Danas smo uštedjeli <strong
+              style="color: var(--success);" id="top-savings">...</strong> tokena.</p>
+        </div>
+        <div id="connection-status" style="display: flex; align-items: center; gap: 8px; font-size: 14px;">
+          <span style="width: 8px; height: 8px; background: var(--error); border-radius: 50%; display: inline-block;"
+            id="status-dot"></span>
+          <span id="status-text">Disconnectirano</span>
+        </div>
+      </header>
+
+      <div class="scroll-area" style="padding: 0;">
+        <!-- Dashboard View -->
+        <div id="view-dashboard" class="view-container active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label"><i data-lucide="file-text" size="14"></i> Datoteka</div>
+              <div class="stat-value" id="stat-files">---</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i data-lucide="layers" size="14"></i> Chunkova</div>
+              <div class="stat-value" id="stat-chunks">---</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i data-lucide="link" size="14"></i> Entiteta</div>
+              <div class="stat-value" id="stat-entities">---</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label"><i data-lucide="trending-down" size="14"></i> Savings (ROI)</div>
+              <div class="stat-value" id="stat-savings">---</div>
+            </div>
+          </div>
+
+          <div style="padding: 0 24px;">
+            <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+              <i data-lucide="activity"></i> Aktivni Zadaci
+            </h3>
+            <div id="job-list">
+              <!-- Jobs will be injected here -->
+              <div style="color: var(--text-secondary); font-style: italic; text-align: center; padding: 40px;"
+                id="no-jobs">
+                Nema aktivnih zadataka.
+              </div>
+            </div>
+          </div>
+        </div> <!-- End Dashboard View -->
+
+        <!-- Knowledge Base View -->
+        <div id="view-knowledge" class="view-container" style="padding: 24px;">
+          <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            <i data-lucide="database"></i> Znanje u Memoriji
+          </h3>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn" id="btn-load-entities" style="padding: 8px 16px; font-size: 13px;">Učitaj
+              Entitete</button>
+            <button class="btn btn-outline" id="btn-load-decisions" style="padding: 8px 16px; font-size: 13px;">Učitaj
+              Odluke</button>
+          </div>
+
+          <div
+            style="background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; overflow-x: auto;">
+            <table class="data-table" id="knowledge-table">
+              <thead>
+                <tr>
+                  <th>Tip / Datoteka</th>
+                  <th>Kontekst / Preview</th>
+                  <th>Izvor (File)</th>
+                </tr>
+              </thead>
+              <tbody id="knowledge-table-body">
+                <tr>
+                  <td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 40px;">Pritisni
+                    gumb iznad za dohvat podataka.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div> <!-- End Knowledge Base View -->
+
+        <!-- Agentic Logs View -->
+        <div id="view-agentic-logs" class="view-container" style="padding: 24px;">
+          <h3 style="margin-bottom: 20px; display: flex; align-items: center; gap: 10px;">
+            <i data-lucide="cpu"></i> Agentic Logs (Context Budgeter)
+          </h3>
+          <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+            Vizualizator logike Context Budgetera pri slaganju paketa za LLM-ove. Prikazuju se zadnje aktivnosti i
+            alokacija token budžeta.
+          </p>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn" id="btn-refresh-agentic" style="padding: 8px 16px; font-size: 13px;">
+              <i data-lucide="refresh-cw" size="14"></i> Osvježi Prikaz
+            </button>
+            <button class="btn btn-outline" id="btn-clear-agentic" style="padding: 8px 16px; font-size: 13px;">
+              Očisti Lokalno
+            </button>
+          </div>
+
+          <div id="agentic-logs-container" style="display: flex; flex-direction: column; gap: 15px;">
+            <div
+              style="text-align: center; color: var(--text-secondary); padding: 40px; background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 12px;">
+              Pritisni 'Osvježi Prikaz' za dohvat podataka iz radne memorije servera.
+            </div>
+          </div>
+        </div> <!-- End Agentic Logs View -->
+
+        <!-- Micelij Graph View -->
+        <div id="view-graph" class="view-container"
+          style="padding: 0; height: calc(100vh - 80px); overflow: hidden; position: relative;">
+          <div
+            style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(0,0,0,0.65); padding: 12px 18px; border-radius: 8px; border: 1px solid var(--card-border); pointer-events: none;">
+            <h3 style="font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue);">
+              <i data-lucide="share-2" size="18"></i> Knowledge Graph
+            </h3>
+            <div style="font-size: 14px; color: var(--text-secondary); margin-top: 6px;">Prikaz projekata i raspoloživog
+              znanja (čvorovi)</div>
+            <div style="font-size: 13px; margin-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 8px;"><span
+                  style="width: 12px; height: 12px; border-radius: 50%; background: #a100ff;"></span> Kronos Core</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span
+                  style="width: 10px; height: 10px; border-radius: 50%; background: #00d2ff;"></span> Projekti</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span
+                  style="width: 10px; height: 10px; border-radius: 50%; background: #ffffff;"></span> Datoteke</div>
+              <div style="display: flex; align-items: center; gap: 8px;"><span
+                  style="width: 8px; height: 8px; border-radius: 50%; background: #00ff88;"></span> Odluke & Entiteti
+              </div>
+            </div>
+          </div>
+          <div id="graph-container" style="width: 100%; height: 100%;"></div>
+        </div> <!-- End Graph View -->
+
+      </div>
+    </main>
+
+    <!-- Right Panel (Live Logs) -->
+    <aside class="panel">
+      <div class="header">
+        <i data-lucide="terminal"></i>
+        <h2 style="font-size: 16px;">Live Agent Stream</h2>
+      </div>
+      <div class="scroll-area">
+        <div class="live-feed" id="live-feed">
+          <div class="log-entry" style="opacity: 0.5;">Sustav spreman za streaming...</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Scripts -->
+  <script type="module" src="./main.js"></script>
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>

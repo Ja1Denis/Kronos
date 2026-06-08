@@ -20,17 +20,17 @@ class Librarian:
         else:
             self.data_path = data_path
             
-        self.store_path = os.path.join(self.data_path, "store")  # ChromaDB
+        self.store_path = os.path.join(self.data_path, "store")  # ChromaDB (legacy)
         self.meta_path = os.path.join(self.data_path, "metadata.db") # SQLite
         self.archive_path = os.path.join(self.data_path, "archive.jsonl") # JSONL
 
-        # Inicijalizacija
-        self._init_sqlite()
-        
         # Učitaj varijable za Gemini embeddings
         from dotenv import load_dotenv
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        load_dotenv(os.path.join(project_root, '.agent', '.env'))
+        curr_dir = os.path.dirname(os.path.abspath(__file__))
+        src_dir = os.path.dirname(curr_dir)
+        root_dir = os.path.dirname(src_dir)
+        workspace_root = os.path.dirname(root_dir)
+        load_dotenv(os.path.join(workspace_root, '.agent', '.env'))
         
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.embedding_function = None
@@ -42,40 +42,32 @@ class Librarian:
                     model_name="models/gemini-embedding-001"
                 )
             except Exception as e:
-                print(f"⚠️ Librarian: Could not init Gemini embeddings: {e}")
+                logger.warning(f"⚠️ Librarian: Could not init Gemini embeddings: {e}")
 
-        # Chroma se inicijalizira lazy (na prvi poziv)
-        self.chroma_client = None
+        # Inicijalizacija
+        self._init_sqlite()
         
     def _get_sqlite_conn(self):
-        """Vraća SQLite konekciju s WAL modom i timeoutom."""
+        """Vraća SQLite konekciju s WAL modom, timeoutom i učitanom sqlite-vec ekstenzijom."""
+        import sqlite_vec
         conn = sqlite3.connect(self.meta_path, timeout=30)
         try:
             conn.execute("PRAGMA journal_mode=WAL")
         except:
             pass
+        try:
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+        except Exception as e:
+            logger.warning(f"⚠️ Librarian: Failed to load sqlite-vec: {e}")
         return conn
 
-    def _get_collection(self):
-        """Helper za dohvat ChromaDB kolekcije."""
-        if not self.chroma_client:
-            self.chroma_client = chromadb.PersistentClient(path=self.store_path)
-        
-        # Ako imamo custom embedding function (npr. Gemini), koristi je.
-        # Inače, ChromaDB koristi default model (all-MiniLM-L6-v2).
-        kwargs = {"name": "kronos_memory"}
-        if self.embedding_function is not None:
-            kwargs["embedding_function"] = self.embedding_function
-            
-        return self.chroma_client.get_or_create_collection(**kwargs)
-
     def _index_entity(self, eid, etype, content, project=None, source=None):
-        """Indeksira entitet u ChromaDB za semantičku pretragu."""
+        """Indeksira entitet u SQLite (sqlite-vec) za semantičku pretragu."""
         if not content or not content.strip():
             return
             
         try:
-            collection = self._get_collection()
             meta = {
                 "source": source or "manual",
                 "project": project or "default",
@@ -92,22 +84,67 @@ class Librarian:
             # Enrich metadata
             final_meta = enrich_metadata(content, meta)
             
-            collection.upsert(
-                ids=[f"entity_{eid}"],
-                documents=[content],
-                metadatas=[final_meta]
-            )
+            # Generiranje embeddinga
+            if not self.embedding_function:
+                logger.warning("⚠️ No embedding function available for entity indexing!")
+                return
+                
+            embeddings = self.embedding_function([content])
+            if not embeddings:
+                logger.warning("⚠️ Failed to generate embedding for entity!")
+                return
+            embedding = embeddings[0]
+            
+            # Spremanje u SQLite tablice
+            import sqlite_vec
+            conn = self._get_sqlite_conn()
+            cursor = conn.cursor()
+            try:
+                # 1. Spasi u vec_metadata
+                cursor.execute('''
+                    INSERT OR REPLACE INTO vec_metadata (custom_id, document, metadata_json, project)
+                    VALUES (?, ?, ?, ?)
+                ''', (f"entity_{eid}", content, json.dumps(final_meta), project or "default"))
+                
+                rowid = cursor.lastrowid
+                
+                # 2. Spasi u vec_items
+                cursor.execute('''
+                    INSERT OR REPLACE INTO vec_items (rowid, embedding)
+                    VALUES (?, ?)
+                ''', (rowid, sqlite_vec.serialize_float32(embedding)))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise e
+            finally:
+                conn.close()
         except Exception as e:
             print(f"{Fore.RED}Greška pri indeksiranju entiteta #{eid}: {e}{Style.RESET_ALL}")
 
     def _delete_entities_from_chroma(self, source_path):
-        """Briše sve entitete vezane uz datoteku iz ChromaDB."""
+        """Briše sve entitete vezane uz datoteku iz SQLite i sqlite-vec."""
         try:
-            collection = self._get_collection()
-            # Brisanje po metapodatku 'source' i 'type'='entity'
-            collection.delete(where={"$and": [{"source": source_path}, {"type": "entity"}]})
+            conn = self._get_sqlite_conn()
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    SELECT rowid FROM vec_metadata 
+                    WHERE json_extract(metadata_json, '$.source') = ? 
+                      AND json_extract(metadata_json, '$.type') = 'entity'
+                ''', (source_path,))
+                rowids = [r[0] for r in cursor.fetchall()]
+                if rowids:
+                    placeholders = ','.join('?' for _ in rowids)
+                    cursor.execute(f"DELETE FROM vec_items WHERE rowid IN ({placeholders})", rowids)
+                    cursor.execute(f"DELETE FROM vec_metadata WHERE rowid IN ({placeholders})", rowids)
+                    conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Error deleting entities: {e}")
+            finally:
+                conn.close()
         except Exception as e:
-            # Ignoriraj ako kolekcija ne postoji ili je prazna
             pass
 
 
@@ -184,6 +221,28 @@ class Librarian:
                 cursor.execute(f"ALTER TABLE entities ADD COLUMN {col} TEXT")
             except sqlite3.OperationalError:
                 pass
+
+        # 4. Tabela za metapodatke vektora
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS vec_metadata (
+                rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+                custom_id TEXT UNIQUE,
+                document TEXT,
+                metadata_json TEXT,
+                project TEXT
+            )
+        ''')
+
+        # 5. Virtualna tabela za sqlite-vec pretragu (dimenzija 3072 za Gemini-embedding-001)
+        try:
+            cursor.execute('''
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_items USING vec0(
+                    rowid INTEGER PRIMARY KEY,
+                    embedding float[3072]
+                )
+            ''')
+        except sqlite3.OperationalError as e:
+            logger.warning(f"⚠️ Librarian: Failed to create vec_items virtual table: {e}")
             
         conn.commit()
         conn.close()
@@ -537,13 +596,20 @@ class Librarian:
             cursor.execute("SELECT type, count(*) FROM entities GROUP BY type")
             stats['entities'] = dict(cursor.fetchall())
             
+            # Broj vektora u sqlite-vec
+            try:
+                cursor.execute("SELECT count(*) FROM vec_items")
+                stats['total_vectors'] = cursor.fetchone()[0]
+            except:
+                stats['total_vectors'] = 0
+            
             # DB size
             if os.path.exists(self.meta_path):
                 stats['db_size_kb'] = os.path.getsize(self.meta_path) / 1024
             else:
                 stats['db_size_kb'] = 0
                 
-            # ChromaDB size (procjena)
+            # ChromaDB size (procjena) - ostavljamo za kompatibilnost
             if os.path.exists(self.store_path):
                 total_size = 0
                 for dirpath, dirnames, filenames in os.walk(self.store_path):
@@ -582,6 +648,11 @@ class Librarian:
             cursor.execute("DELETE FROM files")
             cursor.execute("DELETE FROM knowledge_fts")
             cursor.execute("DELETE FROM entities")
+            try:
+                cursor.execute("DELETE FROM vec_items")
+                cursor.execute("DELETE FROM vec_metadata")
+            except:
+                pass
             conn.commit()
         except Exception as e:
             print(f"Greška pri brisanju SQLite podataka: {e}")

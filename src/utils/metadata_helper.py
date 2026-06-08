@@ -11,23 +11,12 @@ _curr_file = os.path.abspath(__file__) # .../kronos/src/utils/metadata_helper.py
 _src_utils = os.path.dirname(_curr_file)
 _src = os.path.dirname(_src_utils)
 _kronos = os.path.dirname(_src)
-
-# Popravak za Railway/Docker (ako je u Dockeru, dopusti cijeli /app root, inače koristi lokalni root)
-if os.path.exists("/app") and _kronos.startswith("/app"):
-    ALLOWED_ROOT = "/app"
-else:
-    ALLOWED_ROOT = os.path.dirname(_kronos) # ai-test-project root
-
-# Podrška za dodatne dozvoljene root putanje putem env varijable
-# Primjer: KRONOS_ALLOWED_ROOTS=E:\M;E:\Projects
-_extra_roots = os.getenv("KRONOS_ALLOWED_ROOTS", "")
-ALLOWED_ROOTS = [ALLOWED_ROOT] + [r.strip() for r in _extra_roots.split(";") if r.strip()]
+ALLOWED_ROOT = os.path.dirname(_kronos) # ai-test-project root
 
 def is_safe_path(file_path: str, allowed_root: str = ALLOWED_ROOT) -> bool:
     """
     SECURITY: Prevents path traversal attacks.
     Provjerava je li putanja unutar dozvoljenog korijenskog direktorija.
-    Podržava provjeru protiv svih ALLOWED_ROOTS.
     """
     if not file_path or not isinstance(file_path, str):
         return False
@@ -40,26 +29,17 @@ def is_safe_path(file_path: str, allowed_root: str = ALLOWED_ROOT) -> bool:
         # Normalize and resolve
         normalized_path = os.path.normpath(file_path)
         
-        # Provjeri sve dozvoljene root putanje
-        roots_to_check = ALLOWED_ROOTS if allowed_root == ALLOWED_ROOT else [allowed_root]
-        
+        # Ako je apsolutna putanja, mora početi sa allowed_root
         if os.path.isabs(normalized_path):
-            path_ok = any(
-                normalized_path.lower().startswith(os.path.abspath(root).lower())
-                for root in roots_to_check
-            )
-            if not path_ok:
+            if not normalized_path.lower().startswith(os.path.abspath(allowed_root).lower()):
                 return False
         else:
+            # Relativna putanja - resolve-aj u apsolutnu i provjeri
             abs_path = os.path.abspath(normalized_path)
-            path_ok = any(
-                abs_path.lower().startswith(os.path.abspath(root).lower())
-                for root in roots_to_check
-            )
-            if not path_ok:
+            if not abs_path.lower().startswith(os.path.abspath(allowed_root).lower()):
                 return False
                 
-        # Dodatna provjera za '..' nakon normalizacije
+        # Dodatna provjera za '..' nakon normalizacije (os.path.normpath rješava većinu)
         if ".." in normalized_path.split(os.sep):
             return False
             

@@ -1,0 +1,61 @@
+{
+  "name": "kronos",
+  "version": "0.7.3",
+  "description": "AI-native semantic memory engine with Self-RAG & temporal knowledge graph",
+  "capabilities": {
+    "tools": {
+      "kronos_query": {
+        "description": "Pitajte Kronos AI sustav o arhitekturi koda, specifičnim datotekama ili znanju o projektu. Podržava SSE streaming i Self-RAG samoispravak.",
+        "params": {
+          "query": "string (obavezno)",
+          "mode": "string (opcionalno: light, auto, extra)",
+          "client_model": "string (opcionalno: npr. gemini-3-flash)",
+          "self_rag": "boolean (opcionalno: default false)"
+        }
+      },
+      "kronos_search": {
+        "description": "Pretraži bazu znanja koristeći semantičku pretragu.",
+        "params": {
+          "query": "string (obavezno)",
+          "project": "string (opcionalno)",
+          "limit": "integer (opcionalno)",
+          "self_rag": "boolean (opcionalno)"
+        }
+      },
+      "kronos_ingest": {
+        "description": "Indeksira datoteke u Kronos bazu znanja asinkrono. Vraća Job ID koji se prati putem kronos_job_status.",
+        "params": {
+          "path": "string (obavezno)",
+          "recursive": "boolean (opcionalno: default true)"
+        }
+      },
+      "kronos_job_status": {
+        "description": "Provjeri status i napredak određenog pozadinskog zadatka.",
+        "params": {
+          "job_id": "string (obavezno)"
+        }
+      },
+      "kronos_list_jobs": {
+        "description": "Prikaži listu nedavnih zadataka iz reda čekanja.",
+        "params": {
+          "limit": "integer (opcionalno)"
+        }
+      },
+      "kronos_stats": {
+        "description": "Dohvati statistiku Kronos baze podataka, job queue-a i ledger ušteda."
+      },
+      "kronos_decisions": {
+        "description": "Dohvati aktivne odluke iz baze znanja s vremenskim okvirom.",
+        "params": {
+          "project": "string (opcionalno)",
+          "date": "string (opcionalno: YYYY-MM-DD)"
+        }
+      }
+    },
+    "resources": {
+      "kronos://meta/card": {
+        "description": "Standardizirana MCP Server Card kartica s metapodacima o Kronosu."
+      }
+    }
+  }
+}

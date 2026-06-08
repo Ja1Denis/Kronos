@@ -13,7 +13,9 @@ from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
 from src.modules.librarian import Librarian
 from src.modules.job_manager import JobManager
+from src.modules.ledger import SavingsLedger
 from src.utils.llm_client import LLMClient
+from src.config import STRINGS
 
 # Tema boja (Cyberpunk vibe)
 custom_theme = Theme({
@@ -26,7 +28,7 @@ custom_theme = Theme({
 })
 
 console = Console(theme=custom_theme)
-app = typer.Typer(help="Kronos: Semantička Memorija za AI Agente", add_completion=False)
+app = typer.Typer(help=STRINGS.APP_HELP, add_completion=False)
 
 @app.command()
 def ingest(
@@ -37,7 +39,7 @@ def ingest(
     """
     Učitava dokumente i stvara semantičku memoriju.
     """
-    console.print(Panel(f"[bold accent]Kronos Ingestor[/] v1.1\n[info]Učitavam iz: {path}[/]", border_style="accent"))
+    console.print(Panel(f"[bold accent]{STRINGS.MSG_INGEST_START.format(path=path)}[/]", border_style="accent"))
 
     ingestor = Ingestor()
     
@@ -46,19 +48,19 @@ def ingest(
 
     # Prikaži statistiku nakon unosa
     stats = Librarian().get_stats()
-    table = Table(title="Status Memorije", box=None, header_style="bold cyan")
-    table.add_column("Metrika", style="accent")
-    table.add_column("Vrijednost", justify="right")
+    table = Table(title=STRINGS.LABEL_STATUS, box=None, header_style="bold cyan")
+    table.add_column(STRINGS.LABEL_METRIC, style="accent")
+    table.add_column(STRINGS.LABEL_VALUE, justify="right")
     
-    table.add_row("Ukupno datoteka", str(stats.get('total_files', 0)))
-    table.add_row("Ukupno chunkova", str(stats.get('total_chunks', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_FILES, str(stats.get('total_files', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_CHUNKS, str(stats.get('total_chunks', 0)))
     
     for etype, count in stats.get('entities', {}).items():
-        table.add_row(f"Entiteti ({etype})", str(count))
+        table.add_row(STRINGS.METRIC_ENTITIES.format(type=etype), str(count))
         
     console.print("\n")
     console.print(table)
-    console.print(f"\n[bold success]✅ Ingestija završena![/]")
+    console.print(f"\n[bold success]✅ {STRINGS.MSG_INGEST_COMPLETE}[/]")
 
 @app.command()
 def ask(
@@ -77,12 +79,12 @@ def ask(
     results = oracle.ask(query, project=project, limit=limit, silent=True, hyde=hyde, expand=expand)
 
     if not results["entities"] and not results["chunks"]:
-        console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
+        console.print(f"[warning]{STRINGS.MSG_NO_RESULTS}[/]")
         return
 
     # 1. PRIKAZ ENTITETA (Structured Objects)
     if results["entities"]:
-        console.print(f"\n[bold accent]💎 Pronađeni Entiteti ({len(results['entities'])}):[/]")
+        console.print(f"\n[bold accent]💎 {STRINGS.MSG_FOUND_ENTITIES.format(count=len(results['entities']))}[/]")
         for ent in results["entities"]:
             source = ent['metadata'].get('source')
             source_name = os.path.basename(source) if source else "Ručni unos"
@@ -99,7 +101,7 @@ def ask(
 
     # 2. PRIKAZ CHUNKOVA (Evidence)
     if results["chunks"]:
-        header = "\n[bold info]📖 Citati iz dokumenata (Evidence):[/]" if results["entities"] else "\n[header]Pronađeni citati:[/]"
+        header = f"\n[bold info]📖 {STRINGS.MSG_FOUND_QUOTES}[/]" if results["entities"] else "\n[header]Pronađeni citati:[/]"
         console.print(header)
         
         for i, res in enumerate(results["chunks"]):
@@ -248,7 +250,7 @@ def chat(
     status_msg = "[bold green]Live Sync: On[/] | [bold magenta]AI Mode: Active[/]"
     if not use_ai: status_msg = "[bold green]Live Sync: On[/] | [dim]AI: Off (Quotes Only)[/]"
     
-    console.print(Panel(f"[bold accent]Kronos Interaktivni Terminal[/]\n[info]Pitaj me bilo što. Upiši 'exit' za kraj.[/]\n[dim]Komande: /project [ime], /clear, /stats, /exit | {status_msg}[/]", border_style="accent"))
+    console.print(Panel(f"[bold accent]{STRINGS.MSG_WELCOME}[/]\n[dim]{status_msg}[/]", border_style="accent"))
     
     session_project = None
     
@@ -264,29 +266,29 @@ def chat(
         # Komande
         if q_lower in ["exit", "quit", "izlaz", "kraj", "/exit"]:
             watcher.stop()
-            console.print("[yellow]Pozdrav! Kronos se vraća u san...[/]")
+            console.print(f"[yellow]{STRINGS.MSG_GOODBYE}[/]")
             break
             
         if q_lower.startswith("/project"):
             parts = query.split()
             if len(parts) > 1:
                 session_project = parts[1]
-                console.print(f"[success]✅ Projekt postavljen na: [bold green]{session_project}[/][/]")
+                console.print(f"[success]✅ {STRINGS.MSG_PROJECT_SET.format(project=session_project)}[/]")
             else:
                 session_project = None
-                console.print("[info]🔄 Pretraga vraćena na globalnu razinu.[/]")
+                console.print(f"[info]🔄 {STRINGS.MSG_GLOBAL_SEARCH}[/]")
             continue
             
         if q_lower == "/clear":
             os.system('cls' if os.name == 'nt' else 'clear')
-            console.print(Panel("[bold accent]Kronos Interaktivni Terminal[/]", border_style="accent"))
+            console.print(Panel(f"[bold accent]{STRINGS.MSG_WELCOME.splitlines()[0]}[/]", border_style="accent"))
             continue
             
         if q_lower == "/stats":
             stats()
             continue
 
-        with console.status("[bold magenta]Kronos razmišlja...", spinner="dots8Bit"):
+        with console.status(f"[bold magenta]{STRINGS.MSG_KRONOS_THINKING}", spinner="dots8Bit"):
             # 1. Detekcija projekta
             target_project = session_project
             if not session_project:
@@ -309,12 +311,12 @@ def chat(
                 results = oracle.ask(query, project=None, limit=3, silent=True, hyde=hyde, expand=expand)
 
         if not results["entities"] and not results["chunks"]:
-            console.print("[warning]Nema pronađenih rezultata za tvoj upit.[/]")
+            console.print(f"[warning]{STRINGS.MSG_NO_RESULTS}[/]")
             continue
 
         # 3. AI Generacija Odgovora (RAG)
         if use_ai and llm:
-            with console.status("[bold blue]Sintetiziram odgovor...", spinner="bouncingBar"):
+            with console.status(f"[bold blue]{STRINGS.MSG_SYNTHESIZING}", spinner="bouncingBar"):
                 # Pripremi kontekst
                 context_parts = []
                 for ent in results["entities"]:
@@ -343,7 +345,7 @@ ODGOVOR:"""
                 console.print("[dim]─" * 40 + "[/]")
 
         # 4. Prikaz Izvora (samo kao reference)
-        console.print("\n[dim]🔍 Izvori:[/]")
+        console.print(f"\n[dim]🔍 {STRINGS.MSG_SOURCES}[/]")
         if results["entities"]:
             for ent in results["entities"]:
                 etype = ent['type']
@@ -367,25 +369,44 @@ def stats():
     librarian = Librarian()
     stats_data = librarian.get_stats()
     
-    table = Table(title="📊 Kronos Statistika", border_style="accent")
-    table.add_column("Kategorija", style="cyan")
-    table.add_column("Detalji", style="white")
+    table = Table(title=f"📊 {STRINGS.CMD_STATS_HELP}", border_style="accent")
+    table.add_column(STRINGS.LABEL_CATEGORY, style="cyan")
+    table.add_column(STRINGS.LABEL_DETAILS, style="white")
     
-    table.add_row("Indeksirane Datoteke", str(stats_data.get('total_files', 0)))
-    table.add_row("Semantički Chunkovi", str(stats_data.get('total_chunks', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_FILES, str(stats_data.get('total_files', 0)))
+    table.add_row(STRINGS.METRIC_TOTAL_CHUNKS, str(stats_data.get('total_chunks', 0)))
     
     # Entiteti
     entities_str = "\n".join([f"• {k.capitalize()}: {v}" for k, v in stats_data.get('entities', {}).items()])
-    table.add_row("Ekstrahirano Znanje", entities_str or "0")
+    table.add_row(STRINGS.METRIC_KNOWLEDGE, entities_str or "0")
     
     # Veličina
-    db_size = stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)
-    table.add_row("Veličina Baze", f"{db_size/1024:.2f} MB")
+    db_size = (stats_data.get('db_size_kb', 0) + stats_data.get('chroma_size_kb', 0)) / 1024
+    table.add_row(STRINGS.METRIC_DB_SIZE, f"{db_size:.2f} MB")
     
     # Job Queue Summary
     job_stats = JobManager().get_job_stats()
     job_summary = f"Total: {job_stats['total']} | OK: {job_stats['success_rate']} | Lat: {job_stats['avg_latency_sec']}"
-    table.add_row("Job Queue", job_summary)
+    table.add_row(STRINGS.METRIC_JOB_QUEUE, job_summary)
+    
+    # Financial Efficiency (Ledger)
+    try:
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(root_dir, "data", "jobs.db")
+        ledger = SavingsLedger(db_path)
+        l_stats = ledger.get_summary(days=30)
+        table.add_row(STRINGS.METRIC_SAVED_TOKENS, f"{l_stats['recent_saved_tokens']:,}")
+        table.add_row(STRINGS.METRIC_AVOIDED_COST, f"${l_stats['recent_usd_saved']:.2f}")
+        table.add_row(STRINGS.METRIC_TOTAL_SAVED, f"${l_stats['total_usd_saved']:.2f}")
+        
+        # Model breakdown
+        if l_stats.get('model_breakdown'):
+            breakdown_lines = []
+            for model, data in l_stats['model_breakdown'].items():
+                breakdown_lines.append(f"• {model}: {data['tokens']:,} t (${data['usd']:.2f})")
+            table.add_row(STRINGS.LABEL_MODEL_SAVINGS, "\n".join(breakdown_lines))
+    except Exception as e:
+        table.add_row("Ledger", f"[dim]Stats unavailable ({e})[/]")
     
     console.print(table)
     
@@ -402,10 +423,10 @@ def projects():
         return
         
     table = Table(title="🏢 Kronos Multi-Project Dashboard", border_style="accent")
-    table.add_column("Projekt", style="bold cyan")
-    table.add_column("Files", justify="center")
-    table.add_column("Chunks", justify="center")
-    table.add_column("Knowledge (Entities)", style="dim")
+    table.add_column(STRINGS.LABEL_PROJECT, style="bold cyan")
+    table.add_column(STRINGS.LABEL_FILES, justify="center")
+    table.add_column(STRINGS.LABEL_CHUNKS, justify="center")
+    table.add_column(STRINGS.LABEL_KNOWLEDGE, style="dim")
     
     for name, data in proj_stats.items():
         entities_summary = ", ".join([f"{k}:{v}" for k, v in data["entities"].items()])
@@ -434,10 +455,10 @@ def decisions(
         return
     
     table = Table(title="⚖️ Odluke", border_style="accent")
-    table.add_column("ID", style="dim", width=6)
-    table.add_column("Sadržaj", style="white", max_width=50)
-    table.add_column("Vrijedi", style="cyan")
-    table.add_column("Status", style="green")
+    table.add_column(STRINGS.LABEL_ID, style="dim", width=6)
+    table.add_column(STRINGS.LABEL_CONTENT, style="white", max_width=50)
+    table.add_column(STRINGS.LABEL_VALIDITY, style="cyan")
+    table.add_column(STRINGS.LABEL_STATUS, style="green")
     
     for dec in decision_list:
         dec_id = str(dec['id'])
@@ -752,14 +773,14 @@ def wipe(
     Briše svu memoriju i resetira bazu.
     """
     if not force:
-        confirm = typer.confirm("[error]Jesi li siguran da želiš obrisati CIJELU memoriju?[/]", default=False)
+        confirm = typer.confirm(f"[error]{STRINGS.MSG_CONFIRM_WIPE}[/]", default=False)
     else:
         confirm = True
         
     if confirm:
         with console.status("[bold red]Brišem podatke..."):
             Librarian().wipe_all()
-        console.print("[bold green]Memorija je uspješno resetirana.[/]")
+        console.print(f"[bold green]{STRINGS.MSG_MEMORY_RESET}[/]")
     else:
         console.print("[info]Otkazano.[/]")
 
@@ -789,11 +810,11 @@ def jobs(
         return
 
     table = Table(title="🕒 Nedavni Poslovi", border_style="accent")
-    table.add_column("ID", style="dim", width=8)
-    table.add_column("Tip", style="bold cyan")
-    table.add_column("Status", style="white")
-    table.add_column("Napredak", justify="right")
-    table.add_column("Kreirano", style="dim")
+    table.add_column(STRINGS.LABEL_ID, style="dim", width=8)
+    table.add_column(STRINGS.LABEL_TYPE, style="bold cyan")
+    table.add_column(STRINGS.LABEL_STATUS, style="white")
+    table.add_column(STRINGS.LABEL_PROGRESS, justify="right")
+    table.add_column(STRINGS.LABEL_CREATED, style="dim")
     
     for job in job_list:
         status_color = "green" if job['status'] == "completed" else ("red" if job['status'] == "failed" else "yellow")

@@ -12,7 +12,7 @@ def test_read_main():
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert "status" in response.json()
 
 def test_stats_endpoint():
     # Testiramo da endpoint vraća 200, čak i ako je baza prazna

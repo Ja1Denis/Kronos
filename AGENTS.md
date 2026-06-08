@@ -41,14 +41,6 @@ Retrieves specifically 'decision' type entities. Use this to check architectural
 
 ---
 
-### ⚠️ Anti-Laziness Protocol (Late Retrieval)
-Kronos uses an advanced "Agentic Pointers" architecture to save tokens. It often returns file paths and summaries (Pointers) instead of full code chunks. 
-
-**CRITICAL RULE FOR ALL AGENTS:**
-> "Kada ti Kronos vrati pointer/referencu na dokument (a ne puni tekst koda), **MORAŠ** pozvati alat za čitanje datoteka (`view_file`, `read_file` ili `fetch_exact`) kako bi dobio stvarni sadržaj prije nego što odgovoriš korisniku ili počneš kodirati. Nikada nemoj samo prepričati putanju datoteke i praviti se da znaš što unutra piše bez da si to doista i pročitao!"
-
----
-
 ## 🏛️ Kronos Architect Protocol
 
 This skill defines the **mandatory process** that an Agent must follow before beginning any complex planning or coding task.

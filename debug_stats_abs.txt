@@ -1,0 +1,4 @@
+CWD: E:\G\GeminiCLI\ai-test-project\kronos
+Ref: E:\G\GeminiCLI\ai-test-project\kronos\src\mcp_server.py
+Keys: ['total_queries', 'total_potential_tokens', 'total_actual_tokens', 'total_saved_tokens', 'total_usd_saved', 'recent_saved_tokens', 'recent_usd_saved', 'model_breakdown', 'days_period']
+Breakdown: {'gemini-3-flash': {'tokens': 1236172, 'usd': 0.12361720000000001}, 'gemini-3-pro': {'tokens': 29985, 'usd': 0.03748125}}

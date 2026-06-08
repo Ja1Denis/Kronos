@@ -55,8 +55,17 @@ class Oracle:
             except Exception as e:
                 print(f"⚠️ Warning: Could not init Gemini embeddings: {e}")
                 self.embedding_function = None
+            
+            try:
+                from src.utils.llm_client import LLMClient
+                self.llm = LLMClient(api_key=api_key)
+                logger.info("🤖 LLM Client initialized for Self-RAG")
+            except Exception as e:
+                logger.warning(f"Could not initialize LLM Client: {e}")
+                self.llm = None
         else:
             self.embedding_function = None
+            self.llm = None
 
         # Initialize Knowledge Graph (v0.6.1+)
         self.graph = None
@@ -69,28 +78,12 @@ class Oracle:
             except Exception as e:
                 logger.warning(f"Could not initialize graph: {e}")
 
-        # ChromaDB može biti zaključan na Windowsima, pa koristimo retry
-        import time
-        self.client = None
-        for attempt in range(3):
-            try:
-                self.client = chromadb.PersistentClient(path=db_path)
-                break
-            except Exception as e:
-                if attempt < 2:
-                    time.sleep(2)
-                else:
-                    raise e
-
-        # Ako imamo custom embedding function (Gemini), koristi je.
-        # Inače, ChromaDB koristi default model (all-MiniLM-L6-v2).
-        collection_kwargs = {"name": "kronos_memory"}
-        if self.embedding_function is not None:
-            collection_kwargs["embedding_function"] = self.embedding_function
-        self.collection = self.client.get_or_create_collection(**collection_kwargs)
-        
         from src.modules.librarian import Librarian
         self.librarian = Librarian()
+        
+        # Ostavljamo ove varijable kao None radi kompatibilnosti
+        self.client = None
+        self.collection = None
         
         # FastPath (Phase 9 - Rust-inspired simulation)
         try:
@@ -115,7 +108,7 @@ class Oracle:
 
     def safe_upsert(self, documents, metadatas, ids):
         """
-        Wrapper oko collection.upsert s validacijom i obogaćivanjem metapodataka.
+        Wrapper za upsert u sqlite-vec s validacijom i obogaćivanjem metapodataka.
         """
         valid_docs = []
         valid_metas = []
@@ -134,12 +127,43 @@ class Oracle:
             valid_ids.append(uid)
             
         if valid_docs:
+            if not self.embedding_function:
+                logger.error("❌ Embedding function not initialized in Oracle!")
+                return
+                
+            try:
+                embeddings = self.embedding_function(valid_docs)
+            except Exception as e:
+                logger.error(f"❌ Failed to generate embeddings in Oracle: {e}")
+                return
+                
+            import sqlite_vec
+            import json
             with self._lock:
-                self.collection.upsert(
-                    documents=valid_docs,
-                    metadatas=valid_metas,
-                    ids=valid_ids
-                )
+                conn = self.librarian._get_sqlite_conn()
+                cursor = conn.cursor()
+                try:
+                    for doc, meta, uid, emb in zip(valid_docs, valid_metas, valid_ids, embeddings):
+                        project = meta.get("project", "default")
+                        # 1. Spasi u vec_metadata
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO vec_metadata (custom_id, document, metadata_json, project)
+                            VALUES (?, ?, ?, ?)
+                        ''', (uid, doc, json.dumps(meta), project))
+                        
+                        rowid = cursor.lastrowid
+                        
+                        # 2. Spasi u vec_items
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO vec_items (rowid, embedding)
+                            VALUES (?, ?)
+                        ''', (rowid, sqlite_vec.serialize_float32(emb)))
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    logger.error(f"❌ Oracle safe_upsert failed: {e}")
+                finally:
+                    conn.close()
 
     def detect_query_type(self, query: str) -> QueryType:
         """
@@ -301,25 +325,63 @@ class Oracle:
         if hyde and self.hypothesizer:
              print(f"DEBUG: Oracle: generating hypothesis for '{query}'...")
              vector_query = self.hypothesizer.generate_hypothesis(query)
-        
-        where_filter = None
-        if project:
-             where_filter = {"project": project}
-             
-        # print(f"DEBUG: Oracle: querying vector collection for '{vector_query[:50]}...'")
+        import sqlite_vec
+        import json
         metrics.log_query()
+        
+        # Generiranje embeddinga za upit
         try:
-            vector_candidates = resilient_vector_query(
-                self.collection, 
-                vector_query, 
-                n_results=limit * 4, 
-                where=where_filter
-            )
+            emb = self.embedding_function([vector_query])[0]
+            emb_bytes = sqlite_vec.serialize_float32(emb)
         except Exception as e:
-            logger.error(f"Vector query failed after retries: {e}")
-            vector_candidates = {'ids': [[]]} # Fallback
+            logger.error(f"Failed to generate query embedding: {e}")
+            emb_bytes = None
             
-        # print("DEBUG: Oracle: vector query done.")
+        vector_candidates = {
+            'ids': [[]],
+            'documents': [[]],
+            'metadatas': [[]],
+            'distances': [[]]
+        }
+        
+        if emb_bytes:
+            conn = self.librarian._get_sqlite_conn()
+            cursor = conn.cursor()
+            try:
+                # Ako filtriramo po projektu, tražimo više kandidata kako bismo kompenzirali
+                k_val = limit * 8 if project else limit * 4
+                if project:
+                    cursor.execute('''
+                        SELECT m.custom_id, m.document, m.metadata_json, v.distance
+                        FROM vec_items v
+                        JOIN vec_metadata m ON v.rowid = m.rowid
+                        WHERE v.embedding MATCH ? AND k = ? AND m.project = ?
+                        ORDER BY v.distance ASC
+                    ''', (emb_bytes, k_val, project))
+                else:
+                    cursor.execute('''
+                        SELECT m.custom_id, m.document, m.metadata_json, v.distance
+                        FROM vec_items v
+                        JOIN vec_metadata m ON v.rowid = m.rowid
+                        WHERE v.embedding MATCH ? AND k = ?
+                        ORDER BY v.distance ASC
+                    ''', (emb_bytes, k_val))
+                    
+                rows = cursor.fetchall()
+                for row in rows:
+                    custom_id, document, metadata_json, distance = row
+                    try:
+                        metadata = json.loads(metadata_json)
+                    except:
+                        metadata = {}
+                    vector_candidates['ids'][0].append(custom_id)
+                    vector_candidates['documents'][0].append(document)
+                    vector_candidates['metadatas'][0].append(metadata)
+                    vector_candidates['distances'][0].append(distance)
+            except Exception as e:
+                logger.error(f"sqlite-vec query failed: {e}")
+            finally:
+                conn.close()
         
         # Stemmed query za FTS (Hybrid AND mode by default)
         try:
@@ -422,12 +484,19 @@ class Oracle:
         except Exception as e:
             return {"available": True, "error": str(e)}
 
-    def ask(self, query, project=None, limit=10, silent=False, hyde=True, expand=False):
+    def ask(self, query, project=None, limit=10, silent=False, hyde=True, expand=False, self_rag=None):
         """
         Thread-safe metoda za upit s robusnim error handlingom i Fallback lancem.
         """
         try:
             with self._lock:
+                if self_rag is None:
+                    self_rag = os.getenv("KRONOS_SELF_RAG", "false").lower() == "true"
+                
+                self_rag_triggered = False
+                self_rag_loops = 1
+                self_rag_reason = ""
+
                 # 0. Fast Path (L0/L1) - High confidence exact matches
                 if self.fast_path:
                     try:
@@ -503,12 +572,77 @@ class Oracle:
                             })
                     except Exception: pass
 
+                # 3.5. Self-RAG Evaluation & Re-query
+                if self_rag and self.llm and all_candidates:
+                    try:
+                        # Limit candidates to top 8 for evaluation to save tokens and time
+                        eval_candidates = all_candidates[:8]
+                        context_pieces = []
+                        for idx, c in enumerate(eval_candidates):
+                            source = c.get('metadata', {}).get('source', 'Unknown')
+                            content_snippet = c.get('content', '')[:1000]
+                            context_pieces.append(f"[{idx+1}] File: {source}\nContent:\n{content_snippet}\n---")
+                        
+                        context_text = "\n".join(context_pieces)
+                        
+                        prompt = f"""You are the Kronos Self-RAG Evaluator.
+Your job is to determine if the retrieved codebase context is SUFFICIENT to answer the user query.
+
+User Query: "{query}"
+
+Retrieved Context:
+{context_text}
+
+Analyze the retrieved context. Is it sufficient to answer the user query? If not, what specific details are missing?
+You MUST respond exactly in the following format:
+STATUS: [SUFFICIENT or INSUFFICIENT]
+REASON: [Brief explanation of why it is or isn't sufficient]
+RE-QUERY: [If INSUFFICIENT, provide a single clean search query (keywords or phrases) to find the missing details. If SUFFICIENT, leave empty.]
+"""
+                        eval_response = self.llm.complete(prompt, model_name="gemini-2.0-flash")
+                        
+                        status = "SUFFICIENT"
+                        re_query = ""
+                        reason = ""
+                        
+                        for line in eval_response.split('\n'):
+                            line_stripped = line.strip()
+                            if line_stripped.startswith("STATUS:"):
+                                status = line_stripped.replace("STATUS:", "").strip()
+                            elif line_stripped.startswith("RE-QUERY:"):
+                                re_query = line_stripped.replace("RE-QUERY:", "").strip()
+                            elif line_stripped.startswith("REASON:"):
+                                reason = line_stripped.replace("REASON:", "").strip()
+                        
+                        if status == "INSUFFICIENT" and re_query:
+                            if not silent:
+                                print(f"{Fore.CYAN}🤖 Self-RAG: Context evaluated as INSUFFICIENT. Reason: {reason}. Running RE-QUERY: '{re_query}'...{Style.RESET_ALL}")
+                            
+                            self_rag_triggered = True
+                            self_rag_loops = 2
+                            self_rag_reason = reason
+                            
+                            try:
+                                retrieved_round2 = self._retrieve_candidates(re_query, project=project, limit=limit, hyde=False)
+                                if retrieved_round2:
+                                    # Add score boost and label method
+                                    for c in retrieved_round2:
+                                        c['score'] = c.get('score', 0.5) + 0.1
+                                        c['method'] = c.get('method', '') + "-SelfRAG"
+                                    all_candidates.extend(retrieved_round2)
+                            except Exception as e:
+                                print(f"{Fore.YELLOW}⚠️ Self-RAG: Re-query retrieval error: {e}{Style.RESET_ALL}")
+                        else:
+                            if not silent:
+                                print(f"{Fore.GREEN}🤖 Self-RAG: Context evaluated as SUFFICIENT. Reason: {reason}{Style.RESET_ALL}")
+                            self_rag_reason = reason
+                    except Exception as e:
+                        print(f"{Fore.YELLOW}⚠️ Self-RAG evaluation failure: {e}{Style.RESET_ALL}")
+
                 # DEFENSE: Check candidates validity
                 if not all_candidates:
-                    if not silent: print(f"{Fore.YELLOW}WARNING: No candidates found for query '{query}'.{Style.RESET_ALL}")
+                    if not silent: print(f"{Fore.YELLOW}WARNING: No candidates found for query.{Style.RESET_ALL}")
                     return self._empty_response("No relevant information found.")
-                else:
-                    if not silent: print(f"{Fore.CYAN}DEBUG: Oracle.ask() found {len(all_candidates)} candidates initially.{Style.RESET_ALL}")
 
                 # 4. Deduplikacija i RANGIRANJE (Temporal Tuning)
                 seen_ids = set()
@@ -546,23 +680,19 @@ class Oracle:
                         unique_candidates.append(cand)
                         seen_ids.add(cid)
                 
-                if not silent: print(f"{Fore.CYAN}DEBUG: Oracle.ask() has {len(unique_candidates)} unique candidates.{Style.RESET_ALL}")
-                
                 # 5. Decision Tree / Classification (Project Map Logic)
                 final_chunks = []
                 final_pointers = []
                 final_entities = []
                 query_keywords = self.extract_keywords(query)
                 
-                # Pragovi su sada viši kako bi prisilili Agentic Pointers (Late Retrieval)
-                # Samo iznimno visoka podudaranja (>= 0.85) idu direktno kao chunks
-                chunk_threshold = 0.85 if is_temporal else 0.85
-                pointer_threshold = 0.20 # Project Map prag
+                # Pragovi su sada fleksibilniji, pogotovo za temporalne upite
+                chunk_threshold = 0.5 if is_temporal else 0.65
+                pointer_threshold = 0.1 # Vrlo nisko da dobijemo "Project Map"
+                
                 for i, cand in enumerate(unique_candidates):
                     u_score = cand.get('utility_score', 0.0)
                     method = cand.get('method', 'unknown')
-                    
-                    if not silent: print(f"{Fore.CYAN}DEBUG: Candidate '{cand.get('id')}' Score={u_score:.3f} Method={method}{Style.RESET_ALL}")
                     
                     if method == 'Entity':
                         final_entities.append(cand)
@@ -578,8 +708,6 @@ class Oracle:
 
                 # 6. Clustering i Finalni odgovor
                 final_pointers = self.cluster_pointers(final_pointers)
-                
-                if not silent: print(f"{Fore.CYAN}DEBUG: Result summary -> {len(final_chunks)} chunks, {len(final_pointers)} pointers, {len(final_entities)} entities.{Style.RESET_ALL}")
 
                 if final_chunks or final_pointers or final_entities:
                     if final_chunks and final_pointers:
@@ -614,13 +742,17 @@ class Oracle:
                     if project:
                         return self.ask(query, project=None, limit=limit, silent=silent)
                     
-                    if not silent: print(f"{Fore.YELLOW}DEBUG: Returning empty response because all results fell under similarity threshold.{Style.RESET_ALL}")
                     resp = self._empty_response("No relevant information found.")
 
                 # Add extra fields for debugging/backward compatibility
                 resp["entities"] = final_entities
                 resp["query_type"] = query_type.value
                 resp["method"] = "Hybrid-Pointer-System"
+                resp["self_rag"] = {
+                    "triggered": self_rag_triggered,
+                    "loops": self_rag_loops,
+                    "reason": self_rag_reason
+                }
                 
                 return resp
         except Exception as e:

@@ -1,5 +1,95 @@
 # Development Log - Kronos
 
+### [2026-06-07] Faza 19: MCP Tasks & Streaming (v0.7.3) - COMPLETED 📦🤖⚡
+- **Cilj:** Poboljšanje responzivnosti MCP alata uvođenjem asinkrone ingestije (Tasks) i SSE streaminga konteksta za kronos_query.
+- **Status:** ✅ Completed (Na Git grani `feat/mcp-tasks-streaming`)
+- **Ključne promjene:**
+    - **Asinkroni `kronos_ingest`:** Alat više ne blokira klijenta. Odmah šalje zadatak u Job Queue i vraća `job_id`. Praćenje se obavlja preko `kronos_job_status`.
+    - **Fino praćenje napretka:** Dodana podrška za `progress_callback` u `Ingestor.run` i `run_batch` koji računa postotak po datotekama i ažurira SQLite te emitira SSE događaje u stvarnom vremenu.
+    - **Jedinstveni Worker:** MCP Server je spojen na punu klasu `Worker` iz `src/modules/worker.py` umjesto internog loopa.
+    - **Streaming u `kronos_query`:** Ugrađen SSE stream u query alat koji u realnom vremenu emitira faze pretrage i postupno šalje chunkove/entitetet pretplatnicima na `/stream`.
+    - **MCP Server Cards:** Kreiran standardizirani `mcp-server-card.json` i izložen kroz resurs `kronos://meta/card`.
+    - **Windows Unicode Encoding:** Riješeni `UnicodeEncodeError` problemi kod printanja emojija na Windowsima u `server.py` i testovima.
+
+### [2026-06-07] Faza 18: Self-RAG petlja & Migration Fix - COMPLETED 📦🤖⚡
+- **Cilj:** Uvođenje evaluacijske petlje za samoispravak i nadopunu konteksta pomoću LLM-a, te ispravak SQLite migracije na postojećim bazama.
+- **Status:** ✅ Completed (Na Git grani `feat/self-rag-loop`)
+- **Ključne promjene:**
+    - **Self-RAG Evaluacija:** `Oracle` modul provodi LLM evaluaciju primarno dohvaćenog konteksta. Ako je kontekst nedovoljan, LLM predlaže `RE-QUERY` s kojim se pokreće drugi krug pretraživanja, a rezultati se spajaju.
+    - **MCP Alati:** Prošireni `kronos_query` i `kronos_search` s parametrom `self_rag` (default: `False`).
+    - **SQLite Migracijski Fix:** Popravljeno dodavanje temporalnih stupaca u `graph_edges` na postojećim bazama izbjegavanjem SQLite greške ne-konstantnog defaulta.
+    - **Testovi i Benchmark:** Stvoreni unit testovi `tests/test_self_rag.py` (3 mock scenarija) i skripta `tests/benchmark_self_rag.py` za analizu performansi dohvata.
+
+### [2026-06-06] Faza 17: Temporal Knowledge Graph (Soft-delete & povijest) - COMPLETED 📦🕸️⚡
+- **Cilj:** Uvođenje vremenskog praćenja (`valid_from`/`valid_to`) za čvorove i veze kako bi se uklonjeni elementi iz koda soft-deletali i filtrirali iz AI konteksta, uz zadržavanje povijesti.
+- **Status:** ✅ Completed (Na Git grani `feat/temporal-knowledge-graph`)
+- **Ključne promjene:**
+    - **Temporalna SQLite shema:**
+        - Tablica `graph_nodes` više nema PRIMARY KEY na `node_id`, već se koristi `id INTEGER PRIMARY KEY AUTOINCREMENT` i indeks na `node_id`. Dodani su stupci `valid_from` i `valid_to`.
+        - Tablica `graph_edges` je proširena sa stupcima `valid_from` i `valid_to`.
+        - Uvedena je automatska migracija za postojeće baze koja rekreira `graph_nodes` i dodaje stupce u `graph_edges` bez gubitka podataka.
+    - **Temporalna add_node / add_edge logika (Python):**
+        - Prilikom unosa, ako se sadržaj ili metapodaci čvora/veze razlikuju od postojećeg aktivnog zapisa, stari zapis se soft-deleta (`valid_to = NOW`), a novi umeće. Ako su isti, unos se preskače.
+    - **Aktivno filtriranje upita (Python & Rust):**
+        - Svi SQL SELECT upiti u `disk_graph.py` i u C++ PyO3 modulu `rust_engine_v3/src/lib.rs` (BFS traversals, paths, subgraphs) nadograđeni su s filterom `valid_to IS NULL` kako bi AI klijenti dobivali isključivo trenutačno važeći codebase kontekst.
+    - **Inkrementalna sinkronizacija (Soft-delete):**
+        - Skripta `build_knowledge_graph.py` sada prati sve čvorove i veze viđene tijekom trenutnog skeniranja.
+        - Na kraju skeniranja, svi aktivni elementi projekta koji nisu viđeni u novom skenu automatski se soft-deletaju postavljanjem `valid_to = CURRENT_TIMESTAMP`.
+
+### [2026-06-06] Faza 16: sqlite-vec integracija (Hibridna konsolidacija) - COMPLETED 📦⚡
+- **Cilj:** Zamjena glomazne i nestabilne ChromaDB baze s ultra-brzom i laganom SQLite ekstenzijom `sqlite-vec`.
+- **Status:** ✅ Completed (Na Git grani `feat/sqlite-vec-migration`)
+- **Ključne promjene:**
+    - **Instalacija i Učitavanje:** Integrirana `sqlite-vec` biblioteka (v0.1.9) u virtualno okruženje na Windows 11. Ekstenzija se učitava dinamički prilikom svake SQLite konekcije u `Librarian._get_sqlite_conn()`.
+    - **Tablični Dizajn:** 
+        - Kreirana tablica `vec_metadata` za pohranu tekstova dokumenta i metapodataka u JSON formatu.
+        - Kreirana virtualna tablica `vec_items` za brzu vektorsku pretragu (dimenzija 3072 za Gemini Embeddings).
+    - **Vektorski Adapter (`Oracle` & `Librarian`):**
+        - Redizajniran `safe_upsert` za slanje i pohranu vektora izravno u SQLite bazu.
+        - Redizajniran `_retrieve_candidates` u `Oracle` klasi: zamijenjen `resilient_vector_query` s SQL MATCH upitom preko `sqlite-vec` ekstenzije. Rezultati se mapiraju u stari Chroma format, čime su spriječeni svi breaking-changes u ostatku koda.
+    - **Pouzdanost i Testiranje:** 
+        - Svi testovi prebačeni s ChromaDB-a na `sqlite-vec` (ažuriran `tests/test_chromadb_health.py`).
+        - Svih **34 integracijskih i unit testova uspješno prolazi** s 0 grešaka.
+        - Eliminirane race condition greške ("database locked") jer se svi podaci nalaze u jednoj datoteci.
+
+### [2026-03-03] Faza 15: Kronos Command Center (Dashboard & SSE) - COMPLETED 🎨
+- **Cilj:** Vizualizacija statusa i memorije Kronos sustava u stvarnom vremenu kroz lokalni web preglednik.
+- **Grana:** `feat/kronos-command-center`
+- **Status:** ✅ Completed (Inicijalna verzija)
+- **Ključne promjene:**
+    - **Dashboard Setup:** Kreiran `/dashboard` direktorij korištenjem Vite-a s Premium Glassmorphism dizajnom.
+    - **Back-end Integracija:** 
+        - Ažuriran `server.py` FastAPI s dodanim `CORSMiddleware` za nesmetanu komunikaciju.
+        - Dodano posluživanje statičkih datoteka (`StaticFiles`) na `/dashboard` ruti.
+    - **Real-time Eventi:** Povezan `EventSource` (SSE) na klijentu (`main.js`) za dohvat sistemskih logova i ažuriranja poslova u pregledu.
+    - **Baza Znanja (Knowledge Base View):**
+        - Implementiran pregled i tablica za iteraciju kroz stvoreno znanje.
+        - Povezani gumbi za dinamičko "fetchiranje" Entiteta (`/entities`) i Odluka (`/decisions`) iz SQLite-a.
+        - UI navigacija prebacuje poglede bez potrebe za reloadanjem stranice.
+
+### [2026-02-19] Faza 14: Rust & Hybrid Graph Optimization (v0.6.2-rust-hybrid) - COMPLETED 🦀⚡
+- **Cilj:** Povećanje performansi pretrage grafa znanja korištenjem Rust-a uz zadržavanje fleksibilnosti Python-a kroz hibridnu arhitekturu.
+- **Status:** ✅ v0.6.2 Released
+- **Ključne promjene:**
+    - **Hibridna Arhitektura ("Smart Router"):**
+        - Implementiran inteligentni router u `DiskKnowledgeGraph` koji na temelju procjene težine upita (fanout * dubina) bira motor.
+        - **Mali upiti:** Python ostaje primarni motor zbog 0ms FFI overhead-a kod jednostavnih SQLite poziva.
+        - **Teški upiti (Weight > 15):** Rust preuzima kontrolu koristeći optimizirane **Recursive CTE** SQL upite na disku.
+    - **Selective Fetch (Hydration):**
+        - Riješen problem sporog stvaranja kompleksnih Python objekata unutar Rust-a.
+        - Rust sada vraća isključivo listu ID-ova čvorova (`Vec<String>`).
+        - Python vrši "batch hydration" koristeći SQL `IN` klauzulu za dohvat punih podataka u jednom koraku.
+    - **Rust Performance (Release Build):**
+        - Uspješno postavljen build proces s `--release` optimizacijama.
+        - SQLite perzistencija unutar Rust-a osigurava minimalnu latenciju pri povezivanju.
+    - **Stabilizacija PyO3 0.20:**
+        - Kôd prilagođen stabilnoj verziji PyO3 0.20 bez korištenja depreciranih/eksperimentalnih API-ja.
+- **Problemi i Rješenja:**
+    - **Problem:** FFI pozivi su skuplji od samog SQL upita za male datasetove.
+    - **Rješenje:** Uvođenje heuristike procjene težine (Smart Router) koja čuva Rust za "maratonske" pretrage.
+    - **Problem:** PyO3 `_bound` API i poteškoće s `PyObject` konverzijom.
+    - **Rješenje:** Redizajn komunikacije na razini ID-ova (minimalistički interface).
+
 ### [2026-02-14] Faza 13: Multi-Agent & Scaling (v0.5.1-multi-agent) - COMPLETED 🛡️
 - **Cilj:** Omogućiti istovremeni rad više AI agenata/IDE prozora nad istom bazom znanja i skalabilnu ingestiju velikih workspaceova.
 - **Status:** ✅ v0.5.1 Released

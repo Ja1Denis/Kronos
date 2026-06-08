@@ -79,6 +79,17 @@ class SavingsLedger:
             """, (cutoff,))
             recent_stats = cursor.fetchone()
             
+            # Breakdown po modelima
+            cursor = conn.execute("""
+                SELECT 
+                    model, 
+                    SUM(tokens_saved) as saved, 
+                    SUM(usd_saved) as usd 
+                FROM savings_log 
+                GROUP BY model
+            """)
+            model_breakdown = {row[0]: {"tokens": row[1], "usd": row[2]} for row in cursor.fetchall()}
+            
             return {
                 "total_queries": total_stats[0] or 0,
                 "total_potential_tokens": total_stats[1] or 0,
@@ -87,6 +98,7 @@ class SavingsLedger:
                 "total_usd_saved": total_stats[4] or 0.0,
                 "recent_saved_tokens": recent_stats[0] or 0,
                 "recent_usd_saved": recent_stats[1] or 0.0,
+                "model_breakdown": model_breakdown,
                 "days_period": days
             }
 

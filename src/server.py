@@ -4,7 +4,16 @@ from typing import List, Optional, Dict, Any
 import os
 import sys
 import time
+import io
 
+if sys.platform == 'win32':
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(encoding='utf-8')
+
+from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 from src.modules.ingestor import Ingestor
 from src.modules.oracle import Oracle
@@ -13,6 +22,10 @@ from src.modules.notification_manager import notification_manager
 from src.utils.metrics import metrics
 
 from contextlib import asynccontextmanager
+import datetime
+
+# Global store for Context Budgeter logic logs
+_agentic_logs = []
 
 # SINGLETON WORKER
 _worker_instance = None
@@ -62,10 +75,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Kronos API", 
-    description="Semantička Memorija za AI Agente (Agentic Pointers)", 
-    version="0.3.0",
+    description="Semantička Memorija za AI Agente", 
+    version="0.2.0",
     lifespan=lifespan
 )
+
+# CORS (Dopušta Dashboardu da priča s API-jem)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # U produkciji bi ovo ograničili
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serviranje Dashboarda (iz mapi 'dashboard')
+app.mount("/dashboard", StaticFiles(directory="dashboard", html=True), name="dashboard")
 
 # Model upita
 class QueryRequest(BaseModel):
@@ -300,8 +325,7 @@ def query_memory(request: QueryRequest):
 
         for p in retrieval_results.get("pointers", []):
              # Pointers represent Project Map / Navigation
-             lines_str = f"{p.get('line_range', [1, 500])[0]}-{p.get('line_range', [1, 500])[1]}"
-             pointer_text = f"FILE: {p['file_path']} (Lines: {lines_str})\nSECTION: {p['section']}\nMATCH: {', '.join(p['keywords'])}"
+             pointer_text = f"FILE: {p['file_path']}\nSECTION: {p['section']}\nMATCH: {', '.join(p['keywords'])}"
              composer.add_item(ContextItem(
                 content=pointer_text,
                 source=p['file_path'],
@@ -320,6 +344,23 @@ def query_memory(request: QueryRequest):
         # 6. Compose Final Context
         final_context = composer.compose()
         audit_log = composer.get_audit_report()
+        
+        # Save Agentic Log
+        dt_str = datetime.datetime.now().strftime("%H:%M:%S")
+        log_entry = {
+            "timestamp": dt_str,
+            "query": request.text,
+            "mode": request.mode or "budget",
+            "method": method,
+            "latency": round(total_latency, 2),
+            "tokens": composer.current_tokens,
+            "budget": composer.config.global_limit,
+            "items_count": len(composer.items),
+            "events": composer.audit_log,
+        }
+        _agentic_logs.insert(0, log_entry)
+        if len(_agentic_logs) > 30:
+            _agentic_logs.pop()
         
         return {
             "status": "success",
@@ -387,6 +428,81 @@ def get_stats():
         return Librarian().get_stats()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/graph_data")
+def get_graph_data():
+    """Generira network graph podatke za 'Micelij' prikaz na frontendu."""
+    import sqlite3
+    lib = Librarian()
+    conn = sqlite3.connect(lib.meta_path)
+    cursor = conn.cursor()
+    
+    nodes = []
+    links = []
+    node_set = set()
+    
+    try:
+        # 1. ROOT Node
+        nodes.append({"id": "KRONOS", "group": 0, "label": "Kronos Core"})
+        node_set.add("KRONOS")
+        
+        # 2. Get all projects
+        cursor.execute("SELECT DISTINCT project FROM files WHERE project IS NOT NULL")
+        projects = [r[0] for r in cursor.fetchall() if r[0]]
+        
+        for proj in projects:
+            proj_id = f"proj_{proj}"
+            nodes.append({"id": proj_id, "group": 1, "label": proj})
+            links.append({"source": "KRONOS", "target": proj_id, "value": 5})
+            node_set.add(proj_id)
+            
+        # 3. Fetch entities (we group by file to avoid enormous clusters)
+        cursor.execute("SELECT project, file_path, type, count(id) FROM entities GROUP BY project, file_path, type")
+        rows = cursor.fetchall()
+        
+        for row in rows:
+            proj, fpath, etype, count = row
+            if not proj: proj = "default"
+            proj_id = f"proj_{proj}"
+            
+            # Ensure project node exists
+            if proj_id not in node_set:
+                nodes.append({"id": proj_id, "group": 1, "label": proj})
+                links.append({"source": "KRONOS", "target": proj_id, "value": 5})
+                node_set.add(proj_id)
+                
+            fname = os.path.basename(fpath) if fpath else "unknown_file"
+            file_id = f"file_{proj}_{fname}"
+            
+            # Preventions against crashing the browser UI (over 800 nodes => we aggregate to project level only)
+            if len(nodes) < 800:
+                if file_id not in node_set:
+                    nodes.append({"id": file_id, "group": 2, "label": fname})
+                    links.append({"source": proj_id, "target": file_id, "value": 3})
+                    node_set.add(file_id)
+                    
+                ent_id = f"ent_{file_id}_{etype}"
+                nodes.append({"id": ent_id, "group": 3 if etype == "decision" else 4, "label": f"{count}x {etype.upper()}"})
+                links.append({"source": file_id, "target": ent_id, "value": 1})
+            else:
+                # Fallback -> Skip files, map entities immediately to projects
+                ent_id = f"ent_aggr_{proj}_{etype}"
+                if ent_id not in node_set:
+                    nodes.append({"id": ent_id, "group": 3, "label": f"{etype.upper()}s"})
+                    links.append({"source": proj_id, "target": ent_id, "value": 1})
+                    node_set.add(ent_id)
+                    
+    except Exception as e:
+        print(f"Graph Data Error: {e}")
+    finally:
+        conn.close()
+        
+    return {"nodes": nodes, "links": links}
+
+@app.get("/agentic_logs")
+def get_agentic_logs():
+    """Vraća povijest Context Budgetera."""
+    return {"logs": _agentic_logs}
 
 @app.get("/entities")
 def get_entities(type: Optional[str] = None):

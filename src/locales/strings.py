@@ -74,6 +74,7 @@ class Strings:
     LABEL_CREATED = "Created"
     LABEL_RELEVANCE = "Relevance"
     LABEL_SEARCH_RESULTS = "Search Results: '{query}'"
+    LABEL_MODEL_SAVINGS = "Savings by Model"
     MSG_NO_RESULTS_FOR = "Unfortunately, Kronos found no relevant information for: '{query}'"
 
     # Metrics names
@@ -167,6 +168,7 @@ class HrStrings(Strings):
     LABEL_CREATED = "Kreirano"
     LABEL_RELEVANCE = "Relevantnost"
     LABEL_SEARCH_RESULTS = "Rezultati pretrage: '{query}'"
+    LABEL_MODEL_SAVINGS = "Ušteda po modelima"
     MSG_NO_RESULTS_FOR = "Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
 
     # Metrics names

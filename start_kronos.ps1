@@ -40,17 +40,26 @@ Write-Host ""
 
 # Kill any existing Kronos on same port
 $existingProcess = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | 
-    Select-Object -ExpandProperty OwningProcess -Unique
+Select-Object -ExpandProperty OwningProcess -Unique
 if ($existingProcess) {
     Write-Host "  Zaustavljam prethodni proces na portu $Port..." -ForegroundColor Yellow
     $existingProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
     Start-Sleep -Seconds 1
 }
 
+# Kill stale mcp_bridge.py processes (they hold dead SSE connections after server restart)
+# IDE will automatically respawn them with fresh connections
+$bridgeProcesses = Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match "mcp_bridge\.py" }
+if ($bridgeProcesses) {
+    Write-Host "  Čistim stale MCP bridge procese ($($bridgeProcesses.Count))..." -ForegroundColor Yellow
+    $bridgeProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
+    Write-Host "  [OK] Bridge procesi ocisceni - IDE ce ih automatski obnoviti." -ForegroundColor Green
+}
+
 # Set environment
 $env:PYTHONPATH = $KronosRoot
 $env:KRONOS_PORT = $Port
-$env:KRONOS_ALLOWED_ROOTS = "E:\M"  # Dozvoljava indeksiranje projekata s E:\M diska
 
 # Start server
 Set-Location $KronosRoot

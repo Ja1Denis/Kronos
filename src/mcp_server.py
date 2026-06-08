@@ -15,8 +15,17 @@ import sys
 import builtins
 import contextlib
 import io
+
+if sys.platform == 'win32':
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(encoding='utf-8')
+
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+import asyncio
+from sse_starlette.sse import EventSourceResponse
 
 # --- AGRESIVNI MCP ŠTIT (Windows / Stdio) ---
 # Spremamo originalne objekte i deskriptore
@@ -63,7 +72,10 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+from src.config import STRINGS
 from src.modules.ledger import SavingsLedger
+from src.modules.notification_manager import notification_manager
+from src.utils.logger import logger
 
 # Inicijaliziraj Ledger
 LEDGER_DB_PATH = os.path.join(ROOT_DIR, "data", "jobs.db") # Koristimo istu bazu kao jobs
@@ -129,6 +141,22 @@ def get_librarian():
 # Inicijaliziraj MCP server
 mcp = FastMCP("kronos")
 
+def start_log_server(port: int):
+    """Pokreće pomoćni HTTP server za Dashboard logove."""
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    import uvicorn
+
+    async def dashboard_stream(request):
+        return EventSourceResponse(notification_manager.subscribe())
+
+    app = Starlette(routes=[
+        Route("/stream", dashboard_stream)
+    ])
+    
+    _real_stderr.write(f"\n[Dashboard] 📈 Log Server pokrenut na http://localhost:{port}/stream\n")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="error")
+
 
 @mcp.tool()
 def kronos_ping() -> str:
@@ -169,7 +197,7 @@ def kronos_reinit_oracle() -> str:
 
 
 @mcp.tool()
-def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-flash") -> str:
+def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-flash", self_rag: bool = False) -> str:
     """
     Pitajte Kronos AI sustav o arhitekturi koda, specifičnim datotekama ili znanju o projektu.
     
@@ -177,6 +205,7 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
         query: Pitanje za Kronos (npr. "Kako radi Oracle klasa?")
         mode: Način upita: 'light' (1500 tokens), 'auto' (4000 tokens), 'extra' (8000 tokens).
         client_model: Naziv modela koji poziva alat (npr. 'gemini-3-flash', 'claude-3-opus').
+        self_rag: Omogući Self-RAG petlju (samoispravak i evaluaciju dostatnosti konteksta).
     
     Returns:
         Odgovor baze znanja s relevantnim kontekstom.
@@ -184,13 +213,21 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
     try:
         from src.modules.context_budgeter import ContextComposer, ContextItem, BudgetConfig
         
+        # Broadcast start query event
+        notification_manager.broadcast_sync("query_stream", {
+            "type": "status",
+            "status": "started",
+            "message": "Pokrećem semantičku pretragu...",
+            "query": query
+        })
+        
         # Brza provjera - ako Oracle još nije spreman, javi korisniku
         if not _oracle_ready:
             remaining = 30
             _oracle_init_event.wait(timeout=remaining)
             if not _oracle_ready:
-                err = _oracle_error or "Nepoznata greška (init timeout)"
-                return f"❌ Oracle inicijalizacija nije uspjela: {err}. Pokušaj pozvati 'kronos_reinit_oracle' ili restartaj Kronos server."
+                err = _oracle_error or "Unknown error (init timeout)"
+                return f"❌ Oracle initialization failed: {err}. Try calling 'kronos_reinit_oracle' or restart Kronos server."
         
         oracle = get_oracle()
         
@@ -209,62 +246,82 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
             config = BudgetConfig()
 
         # 1. Dohvat kandidata
-        retrieval_results = oracle.ask(query, limit=limit, silent=True)
+        notification_manager.broadcast_sync("query_stream", {
+            "type": "status",
+            "status": "retrieving",
+            "message": "Dohvaćam kandidate iz vektorske i FTS baze..."
+        })
+        retrieval_results = oracle.ask(query, limit=limit, silent=True, self_rag=self_rag)
         
-        if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks') and not retrieval_results.get('pointers')):
-            return f"Nažalost, Kronos nije pronašao relevantne informacije za: '{query}'"
+        if not retrieval_results or (not retrieval_results.get('entities') and not retrieval_results.get('chunks')):
+            notification_manager.broadcast_sync("query_stream", {
+                "type": "status",
+                "status": "completed",
+                "message": "Pretraga završena s 0 rezultata."
+            })
+            return STRINGS.MSG_NO_RESULTS_FOR.format(query=query)
             
         # 2. Sastavljanje konteksta pomoću Budgetera
-        composer = ContextComposer(config=config)
+        notification_manager.broadcast_sync("query_stream", {
+            "type": "status",
+            "status": "composing",
+            "message": "Sastavljam optimalni kontekst...",
+            "entities_found": len(retrieval_results.get('entities', [])),
+            "chunks_found": len(retrieval_results.get('chunks', []))
+        })
         
-        # Dodaj entitete
-        for e in retrieval_results.get('entities', []):
+        composer = ContextComposer(config=config, model_name=client_model)
+        
+        # Dodaj entitete i emitiraj ih kroz stream
+        for idx, e in enumerate(retrieval_results.get('entities', [])):
             composer.add_item(ContextItem(
                 kind="entity",
                 content=e['content'],
                 source=e.get('metadata', {}).get('source', 'Unknown'),
                 utility_score=0.9
             ))
+            notification_manager.broadcast_sync("query_stream", {
+                "type": "entity",
+                "index": idx,
+                "source": e.get('metadata', {}).get('source', 'Unknown'),
+                "content": e['content'][:300] + "..." if len(e['content']) > 300 else e['content']
+            })
             
-        # Dodaj chunkove
-        for c in retrieval_results.get('chunks', []):
+        # Dodaj chunkove i emitiraj ih kroz stream
+        for idx, c in enumerate(retrieval_results.get('chunks', [])):
             composer.add_item(ContextItem(
                 kind="chunk",
                 content=c['content'],
                 source=c.get('metadata', {}).get('source', 'Unknown'),
                 utility_score=c.get('score', 0.5)
             ))
-            
-        # Dodaj pointere (Agentic Mode)
-        for p in retrieval_results.get('pointers', []):
-            # p je dict serijaliziran iz Pointer objekta, formatirajmo ga priručno
-            file_path = p.get('file_path', 'Unknown')
-            section = p.get('section', 'Untitled')
-            lines = f"{p.get('line_range', [0,0])[0]}-{p.get('line_range', [0,0])[1]}"
-            kw_str = ", ".join(p.get('keywords', []))
-            
-            p_content = (f"📍 Reference: {file_path} (Lines: {lines})\n"
-                         f"   Section: {section}\n"
-                         f"   Keywords: {kw_str}\n"
-                         f"   Confidence: {p.get('confidence', 0.0):.2f}")
-                         
-            composer.add_item(ContextItem(
-                kind="pointer",
-                content=p_content,
-                source=file_path,
-                utility_score=p.get('confidence', 0.5)
-            ))
+            notification_manager.broadcast_sync("query_stream", {
+                "type": "chunk",
+                "index": idx,
+                "source": c.get('metadata', {}).get('source', 'Unknown'),
+                "content": c['content'][:300] + "..." if len(c['content']) > 300 else c['content']
+            })
             
         # 3. Finalni formatirani odgovor
         main_context = composer.compose()
         efficiency_report = composer.get_efficiency_report()
         
+        notification_manager.broadcast_sync("query_stream", {
+            "type": "status",
+            "status": "completed",
+            "message": "Uspješno sastavljen kontekst.",
+            "tokens": composer.current_tokens,
+            "potential_tokens": composer.potential_tokens
+        })
+        
         # 4. Spremi u Ledger (samo ako je bilo potencijala)
         if composer.potential_tokens > 0:
             saved_tokens = max(0, composer.potential_tokens - composer.current_tokens)
-            # Izračunaj USD
-            price = composer.pricing.get(composer.model_name, composer.pricing["default"])
-            usd_saved = (saved_tokens / 1_000_000) * price
+            # Izračunaj USD (koristeći INPUT cijenu)
+            price_dict = composer.get_price_for_model(composer.model_name)
+            input_price = price_dict.get("input", 0.15)
+            
+            usd_saved = (saved_tokens / 1_000_000) * input_price
             
             _ledger.record_savings(
                 query=query, 
@@ -274,14 +331,23 @@ def kronos_query(query: str, mode: str = "auto", client_model: str = "gemini-3-f
                 usd_saved=usd_saved
             )
         
+        # Broadcast to dashboard
+        notification_manager.broadcast_sync("log", {
+            "type": "query",
+            "query": query,
+            "model": client_model,
+            "tokens": composer.current_tokens,
+            "potential_tokens": composer.potential_tokens
+        })
+        
         return main_context + "\n" + efficiency_report
     
     except Exception as e:
-        return f"Greška u kronos_query: {str(e)}"
+        return f"{STRINGS.ERROR} in kronos_query: {str(e)}"
 
 
 @mcp.tool()
-def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
+def kronos_search(query: str, project: str = None, limit: int = 5, self_rag: bool = False) -> str:
     """
     Pretraži bazu znanja koristeći semantičku pretragu.
     
@@ -289,22 +355,22 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
         query: Tekst upita za pretragu (npr. "Kako radi hybrid search?")
         project: Opcionalno ime projekta za filtriranje rezultata
         limit: Maksimalni broj rezultata (default: 5)
+        self_rag: Omogući Self-RAG petlju (samoispravak i evaluaciju dostatnosti konteksta).
     
     Returns:
         Formatiran tekst s relevantnim rezultatima iz baze znanja.
     """
     try:
         oracle = get_oracle()
-        results = oracle.ask(query, project=project, limit=limit, silent=True)
+        results = oracle.ask(query, project=project, limit=limit, silent=True, self_rag=self_rag)
         
         if not results:
-            return f"Nema rezultata za upit: '{query}'"
+            return f"{STRINGS.MSG_NO_RESULTS} ('{query}')"
         
-        output = [f"## Rezultati pretrage: '{query}'\n"]
+        output = [f"## {STRINGS.LABEL_SEARCH_RESULTS.format(query=query)}\n"]
         
         entities = results.get('entities', [])
         chunks = results.get('chunks', [])
-        pointers = results.get('pointers', [])
         
         all_res = entities + chunks
         
@@ -318,70 +384,21 @@ def kronos_search(query: str, project: str = None, limit: int = 5) -> str:
             
             relevance = round(score * 100, 1) if score else 0
             
-            output.append(f"### Rezultat {i} [{res_type}] (Relevantnost: {relevance}%)")
-            output.append(f"**Izvor:** `{os.path.basename(source)}` | **Projekt:** {proj}\n")
+            output.append(f"### Result {i} [{res_type}] ({STRINGS.LABEL_RELEVANCE}: {relevance}%)")
+            output.append(f"**{STRINGS.MSG_SOURCES.rstrip(':')}:** `{os.path.basename(source)}` | **{STRINGS.LABEL_PROJECT}:** {proj}\n")
             output.append(f"```\n{content[:500]}{'...' if len(content) > 500 else ''}\n```\n")
-            
-        # Dodaj prikaz pointera
-        if pointers:
-            output.append(f"\n## 📍 Pronađeni Pokazivači (Agentic Pointers) ({len(pointers)})\n")
-            for j, p in enumerate(pointers, 1):
-                file_path = p.get('file_path', 'Nepoznato')
-                sec = p.get('section', 'Untitled')
-                lines = f"{p.get('line_range', [0,0])[0]}-{p.get('line_range', [0,0])[1]}"
-                rel = round(p.get('confidence', 0) * 100, 1)
-                
-                output.append(f"### Pokazivač {j} (Relevantnost: {rel}%)")
-                output.append(f"- **Izvor:** `{os.path.basename(file_path)}` (Linije: {lines})")
-                output.append(f"- **Sekcija:** {sec}")
-                output.append(f"- **Ključne riječi:** {', '.join(p.get('keywords', []))}\n")
         
+        # Broadcast to dashboard
+        notification_manager.broadcast_sync("log", {
+            "type": "search",
+            "query": query,
+            "results_count": len(all_res)
+        })
+
         return "\n".join(output)
     
     except Exception as e:
         return f"Greška pri pretrazi: {str(e)}"
-
-
-@mcp.tool()
-def kronos_read_file(file_path: str, start_line: int = 1, end_line: int = None) -> str:
-    """
-    Kada ti 'kronos_query' ili 'kronos_search' vrati Pointer (📍 Reference), OBAVEZNO iskoristi ovaj alat 
-    da bi pročitao stvarni kod prije donošenja zaključka.
-    
-    Args:
-        file_path: Putanja do datoteke koju želiš pročitati.
-        start_line: Početna linija (default: 1)
-        end_line: Završna linija. Ako nije zadana, čita cijeli file.
-    
-    Returns:
-        Stvarni izvorni kod iz datoteke s brojevima linija.
-    """
-    try:
-        # Pretvori u apsolutnu putanju
-        full_path = os.path.abspath(os.path.join(ROOT_DIR, file_path))
-        
-        if not os.path.exists(full_path):
-            return f"❌ Greška: Datoteka {file_path} ne postoji."
-            
-        with open(full_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            
-        # Logika za izvlačenje specifičnih linija
-        if end_line is None:
-            end_line = len(lines)
-            
-        start_idx = max(0, start_line - 1)
-        end_idx = min(len(lines), end_line)
-        
-        output = [f"## Kod iz {file_path} (linije {start_line}-{end_line}):\n```python"]
-        for i in range(start_idx, end_idx):
-            output.append(f"{i+1:4d} | {lines[i].rstrip()}")
-        output.append("```")
-        
-        return "\n".join(output)
-        
-    except Exception as e:
-        return f"Greška pri čitanju datoteke: {str(e)}"
 
 
 @mcp.tool()
@@ -396,13 +413,13 @@ def kronos_stats() -> str:
         librarian = get_librarian()
         stats = librarian.get_stats()
         
-        output = ["## 📊 Kronos Statistika\n"]
-        output.append(f"| Metrika | Vrijednost |")
+        output = [f"## 📊 {STRINGS.CMD_STATS_HELP}\n"]
+        output.append(f"| {STRINGS.LABEL_METRIC} | {STRINGS.LABEL_VALUE} |")
         output.append(f"|---------|------------|")
-        output.append(f"| **Datoteke** | {stats.get('total_files', 0):,} |")
-        output.append(f"| **Chunkovi** | {stats.get('total_chunks', 0):,} |")
-        output.append(f"| **SQLite veličina** | {stats.get('db_size_kb', 0):.1f} KB |")
-        output.append(f"| **ChromaDB veličina** | {stats.get('chroma_size_kb', 0):.1f} KB |")
+        output.append(f"| **{STRINGS.METRIC_TOTAL_FILES}** | {stats.get('total_files', 0):,} |")
+        output.append(f"| **{STRINGS.METRIC_TOTAL_CHUNKS}** | {stats.get('total_chunks', 0):,} |")
+        output.append(f"| **{STRINGS.METRIC_DB_SIZE} (SQLite - Active)** | {stats.get('db_size_kb', 0):.1f} KB |")
+        output.append(f"| **{STRINGS.METRIC_DB_SIZE} (Chroma - Legacy Backup)** | {stats.get('chroma_size_kb', 0):.1f} KB |")
         
         entities = stats.get('entities', {})
         if entities:
@@ -417,14 +434,14 @@ def kronos_stats() -> str:
         try:
             jm = get_job_manager()
             jstats = jm.get_job_stats()
-            output.append(f"\n### 🕒 Job Queue")
-            output.append(f"| Status | Broj |")
+            output.append(f"\n### 🕒 {STRINGS.METRIC_JOB_QUEUE}")
+            output.append(f"| {STRINGS.LABEL_STATUS} | {STRINGS.LABEL_VALUE} |")
             output.append(f"|--------|------|")
             for status, count in jstats.get('counts', {}).items():
                 output.append(f"| {status.capitalize()} | {count} |")
-            output.append(f"\n- **Ukupno poslova:** {jstats['total']}")
+            output.append(f"\n- **Total Jobs:** {jstats['total']}")
             output.append(f"- **Success Rate:** {jstats['success_rate']}")
-            output.append(f"- **Prosječna latencija:** {jstats['avg_latency_sec']}")
+            output.append(f"- **Average Latency:** {jstats['avg_latency_sec']}")
         except Exception as e:
             output.append(f"\n*Greška pri dohvaćanju Job Queue stats: {e}*")
             
@@ -432,11 +449,20 @@ def kronos_stats() -> str:
         try:
             lstats = _ledger.get_summary(days=30)
             output.append(f"\n### 💰 Financial Efficiency (Last 30 Days)")
-            output.append(f"| Metrika | Vrijednost |")
+            output.append(f"| {STRINGS.LABEL_METRIC} | {STRINGS.LABEL_VALUE} |")
             output.append(f"|---------|------------|")
             output.append(f"| **Saved Tokens** | {lstats['recent_saved_tokens']:,} |")
             output.append(f"| **Avoided Cost** | **${lstats['recent_usd_saved']:.4f}** |")
             output.append(f"| **Total All-Time** | **${lstats['total_usd_saved']:.2f}** |")
+            
+            # Breakdown po modelima
+            if lstats.get('model_breakdown'):
+                output.append(f"| | |")
+                output.append(f"| **{STRINGS.LABEL_MODEL_SAVINGS}** | |")
+                for model, data in lstats['model_breakdown'].items():
+                    # Format: • gemini-3-flash: 50k ($0.50)
+                    row = f"• {model}: {data['tokens']:,} t (${data['usd']:.2f})"
+                    output.append(f"| | {row} |")
         except Exception as e:
             output.append(f"\n*Greška pri dohvaćanju Ledger stats: {e}*")
 
@@ -487,31 +513,34 @@ def kronos_decisions(project: str = None, date: str = None) -> str:
 @mcp.tool()
 def kronos_ingest(path: str, recursive: bool = True) -> str:
     """
-    Indeksira datoteke u Kronos bazu znanja.
+    Indeksira datoteke u Kronos bazu znanja asinkrono (call-now / fetch-later).
+    Pratite napredak s 'kronos_job_status'.
     
     Args:
         path: Putanja do datoteke ili direktorija za indeksiranje
         recursive: Ako je True, rekurzivno indeksira poddirektorije (default: True)
     
     Returns:
-        Poruka o statusu indeksiranja.
+        Poruka s potvrdom i ID-om posla.
     """
     try:
-        from src.modules.ingestor import Ingestor
-        
-        ingestor = Ingestor(db_path=os.path.join(ROOT_DIR, "data"))
-        
         # Provjeri postoji li putanja
         full_path = os.path.abspath(path)
         if not os.path.exists(full_path):
-            return f"Putanja ne postoji: {full_path}"
+            return f"❌ Putanja ne postoji: {full_path}"
         
-        ingestor.run(path=full_path, recursive=recursive, silent=True)
+        jm = get_job_manager()
+        project_name = os.path.basename(full_path) or "default"
+        job_id = jm.submit_job('ingest', {
+            'path': full_path, 
+            'recursive': recursive,
+            'project': project_name
+        })
         
-        return f"✅ Uspješno indeksirano: `{full_path}` (recursive={recursive})"
+        return f"🚀 Posao indeksiranja je pokrenut u pozadini. Job ID: `{job_id}`. Koristite `kronos_job_status` za praćenje napretka."
         
     except Exception as e:
-        return f"Greška pri indeksiranju: {str(e)}"
+        return f"❌ Greška pri indeksiranju: {str(e)}"
 
 
 @mcp.tool()
@@ -602,7 +631,22 @@ def kronos_list_jobs(limit: int = 10) -> str:
         return f"Greška pri listanju poslova: {str(e)}"
 
 
-KRONOS_SSE_PORT = int(os.environ.get("KRONOS_PORT", "8765"))
+@mcp.resource("kronos://meta/card")
+def get_server_card() -> str:
+    """
+    Dohvaća MCP Server Card za Kronos s informacijama o mogućnostima, verziji i alatima.
+    """
+    card_path = os.path.join(ROOT_DIR, "mcp-server-card.json")
+    if os.path.exists(card_path):
+        try:
+            with open(card_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            return f'{{"error": "Failed to read server card: {str(e)}"}}'
+    return '{"error": "Server card not found"}'
+
+
+KRONOS_SSE_PORT = int(os.environ.get("PORT", os.environ.get("KRONOS_PORT", "8765")))
 
 def main():
     """Pokreće MCP server u stdio ili SSE modu."""
@@ -631,8 +675,10 @@ def main():
     try:
         # --- POKRENI JOB WORKER ---
         try:
+            from src.modules.worker import Worker
             jm = get_job_manager()
-            jm.start_worker()
+            worker = Worker(manager=jm)
+            worker.start()
             mcp_logger.info("👷 Job Worker thread started")
         except Exception as e:
             mcp_logger.error(f"❌ Failed to start Job Worker: {e}")
@@ -648,9 +694,12 @@ def main():
             os.dup2(_original_stdout_fd, 1)
             sys.stdout = _real_stdout
             
-            # Konfiguriraj port i host
-            mcp.settings.host = "0.0.0.0"
-            mcp.settings.port = args.port
+            # FastMCP >= 1.0 Settings format
+            if hasattr(mcp, "settings"):
+                mcp.settings.host = "0.0.0.0"
+                mcp.settings.port = args.port
+            # Alternatively, force args.port through env for fallback
+            os.environ["PORT"] = str(args.port)
 
             # --- Docker Host Header Fix (421 Misdirected Request) ---
             # Starlette/MCP odbija zahtjeve s Host headerom koji nije "localhost".
@@ -667,7 +716,7 @@ def main():
                         new_headers = []
                         for name, value in headers:
                             if name == b"host":
-                                port = value.decode().split(":")[-1] if b":" in value else "8765"
+                                port = value.decode().split(":")[-1] if b":" in value else str(args.port)
                                 new_headers.append((b"host", f"localhost:{port}".encode()))
                             else:
                                 new_headers.append((name, value))
@@ -681,6 +730,10 @@ def main():
                 _orig_config_init(self_cfg, wrapped, *a, **kw)
             uvicorn.Config.__init__ = _patched_config_init
             mcp_logger.info("🛡️ HostRewriteMiddleware aktiviran (Docker compatible)")
+
+            # --- POKRENI LOG SERVER ZA DASHBOARD ---
+            log_port = args.port + 1 # npr. 8766
+            threading.Thread(target=start_log_server, args=(log_port,), daemon=True).start()
 
             mcp.run(transport="sse")
         else:

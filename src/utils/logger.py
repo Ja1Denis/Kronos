@@ -15,6 +15,12 @@ class KronosLogger:
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         
         # 1. File Handler (za trajnu pohranu)
+        # Ako je log_dir relativan, razriješi ga relativno na korijen projekta
+        # da se izbjegne pisanje u system32 kad se MCP pokrene iz IDE-a
+        if not os.path.isabs(log_dir):
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            log_dir = os.path.join(project_root, log_dir)
+
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
             

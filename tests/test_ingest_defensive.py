@@ -26,10 +26,16 @@ def test_safe_upsert_enrichment(tmp_path):
     
     oracle.safe_upsert(docs, metas, ids)
     
-    # Verify result in Chroma
-    res = oracle.collection.get(ids=["id1"])
-    assert len(res["ids"]) == 1
-    meta = res["metadatas"][0]
+    # Verify result in sqlite-vec
+    import json
+    conn = oracle.librarian._get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT custom_id, document, metadata_json FROM vec_metadata WHERE custom_id = ?", ("id1",))
+    row = cursor.fetchone()
+    assert row is not None
+    custom_id, document, metadata_json = row
+    meta = json.loads(metadata_json)
     assert "indexed_at" in meta
     assert "content_hash" in meta
     assert meta["source"] == "test.md"
+    conn.close()

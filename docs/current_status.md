@@ -1,13 +1,49 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-02-16 | Version: v0.6.1-multi-graf-agent 🚀
+Datum: 2026-06-07 | Version: v0.7.3 📦🤖⚡
 
-### 🚀 Status: Faza 14 - KNOWLEDGE GRAPH (NEW! 🔥)
+### 🚀 Status: Faza 19 - MCP TASKS & STREAMING (COMPLETED ✅)
 
-### [2026-02-16] Faza 14 Postignuća:
-- **DiskKnowledgeGraph:** Implementiran SQLite-based graph storage za low-RAM knowledge graph.
-- **Cross-Project Pattern Matching:** Graf omogućuje reuse komponenti između projekata.
-- **Token Ušteda:** Dodatnih 85-90% uštede tokena kroz graph-based context retrieval.
-- **Modular Design:** Novi `src/modules/disk_graph.py` i `scripts/build_knowledge_graph.py`.
+### [2026-06-07] Faza 19 Postignuća:
+- **Asinkroni `kronos_ingest`:** Alat je refaktoriran u asinkroni (fetch-later) oblik. Odmah vraća `job_id`, a klijent prati napredak preko `kronos_job_status`.
+- **Fino praćenje napretka:** Uvedena podrška za progress callbacke u `Ingestor` i integrirana u `Worker` kako bi se progress po datotekama slao preko SSE i spremao u SQLite.
+- **Jedinstveni Worker:** MCP Server koristi naprednu klasu `Worker` iz `src/modules/worker.py` umjesto internog worker loopa.
+- **Streaming u `kronos_query`:** Dodano slanje real-time SSE događaja s fazama pretraživanja i postupnim chunkovima/entitetima tijekom obrade upita.
+- **MCP Server Cards:** Kreirana standardizirana kartica poslužitelja `mcp-server-card.json` i izložena kao MCP resurs `kronos://meta/card`.
+- **Windows UTF-8 Rješavanje:** Riješeni encoding problemi s emojijima na Windowsima u `server.py` i `test_integration.py`.
+
+### 🚀 Status: Faza 18 - SELF-RAG LOOP & MIGRATION FIX (COMPLETED ✅)
+
+### [2026-06-07] Faza 18 Postignuća:
+- **Self-RAG Implementacija:** Integriran `LLMClient` u `Oracle` modul. Uvedena evaluacijska petlja u `Oracle.ask()` koja provjerava dostatnost konteksta. Ako je kontekst nedovoljan, LLM generira novi upit (re-query), sustav pokreće sekundarno pretraživanje te spaja i prioritizira rezultate.
+- **MCP Alati:** Nadograđeni `kronos_query` i `kronos_search` s podrškom za parametar `self_rag`.
+- **Popravak SQLite Migracije:** Riješena SQLite greška dodavanja stupca s ne-konstantnim defaultom u `disk_graph.py`. Stupci se dodaju bez defaulta, a vrijednosti kopiraju iz `created_at` stupca.
+- **Testovi i Benchmark:** Dodan `tests/test_self_rag.py` (unit testovi s mockovima) i `tests/benchmark_self_rag.py` (skripta za mjerenje latencije i dohvata). Svi testovi prolaze 100%.
+
+### 🚀 Status: Faza 17 - TEMPORAL KNOWLEDGE GRAPH (COMPLETED ✅)
+
+### [2026-06-06] Faza 17 Postignuća:
+- **Temporalna Schema & Migracija:** Nadograđene SQLite tablice `graph_nodes` i `graph_edges` s `valid_from` i `valid_to` stupcima te uklonjen PRIMARY KEY s `node_id` radi omogućavanja povijesnih verzija čvorova. Dodana automatska migracija za postojeće baze.
+- **Temporalni Upiti (Python & Rust):** Ažurirani SQL SELECT upiti u Python modulu `disk_graph.py` i Rust modulu `rust_engine_v3/src/lib.rs` da filtriraju isključivo aktivne elemente (`valid_to IS NULL`).
+- **Inkrementalna Ingestija & Soft-Delete:** Nadograđena skripta `build_knowledge_graph.py` s mehanizmom praćenja viđenih elemenata. Elementi koji više ne postoje u codebaseu automatski se soft-deletaju (`valid_to = CURRENT_TIMESTAMP`) umjesto fizičkog brisanja.
+- **Verifikacijski Testovi:** Dodan unit test `tests/test_temporal_graph.py` za testiranje cjelokupne temporalne logike grafa.
+
+### 🚀 Status: Faza 16 - SQLITE-VEC VECTOR MIGRATION (COMPLETED ✅)
+
+### [2026-06-06] Faza 16 Postignuća:
+- **sqlite-vec Integracija:** ChromaDB u potpunosti zamijenjen s SQLite ekstenzijom `sqlite-vec` za pohranu i pretraživanje vektora.
+- **Konsolidirana Baza:** Sve informacije (FTS5, graf, metapodaci i vektori) se sada nalaze unutar jedne SQLite datoteke (`metadata.db`), čime su eliminirane race-condition greške i database lockovi.
+- **Zero-Change API:** Rezultati SQLite vektorskih upita se automatski pretvaraju u stari Chroma format, sprječavajući bilo kakav breaking change u ostatku projekta.
+- **Full Test Integrity:** Svih 34 testa uspješno prolazi bez grešaka.
+
+### 🚀 Status: Faza 15 - KRONOS COMMAND CENTER (COMPLETED ✅)
+- **Dashboard & SSE:** Vizualizacija statusa i memorije Kronos sustava u stvarnom vremenu.
+
+### 🚀 Status: Faza 14 - RUST & HYBRID GRAPH OPTIMIZATION (COMPLETED ✅)
+- **Smart Router Arhitektura:** Implementiran inteligentni prebacivač koji koristi Rust za teške graf upite (duboki traversal), a Python za lagane (overhead-free).
+- **Release Build Rust Engine:** Rust modul kompajliran s `--release` zastavicom, optimiziran za SQLite Recursive CTE.
+- **Selective Hydration:** Implementiran minimalistički interface (Rust vraća IDs -> Python puni podatke). Eliminiran FFI objektni overhead.
+- **PyO3 0.20 Stability:** Sustav stabiliziran na PyO3 0.20 bez depreciranih API-ja.
+- **Zero-Crash Fallback:** Implementirana robustna `try-except` logika s automatskim prebacivanjem na Python u slučaju Rust grešaka.
 
 ### 🚀 Status: Faza 13 - MULTI-AGENT & SCALING (COMPLETED ✅)
 Kronos je sada potpuno skalabilan sustav sposoban za istovremenu podršku više AI agenata putem jedne centralne baze znanja.
@@ -74,7 +110,11 @@ Kronos je uspješno transformiran u proaktivnog, asinkronog AI suradnika.
 
 ### ⏭️ Sljedeći koraci (Phase 9 & 10)
 - **Faza 9: User Experience (The Dashboard)**
-    - Izrada centralnog GUI-ja (Vite/React) za vizualizaciju Job Queue i SSE notifikacija.
+    - [DONE] Izrada centralnog GUI-ja (Vite/React ili Vanilla) za vizualizaciju Job Queue i Baze Znanja.
+    - [DONE] Implementiran Agentic Logs vizualizator za pregled rada Context Budgetera.
+    - [TODO] Postavke (Settings panel): Tipka putem koje korisnik može ručno birati modele generiranja.
+    - [TODO] Fast Ingestor Action Bar: Unosno polje za brzi ingest samo jedne specifične datoteke (umjesto čitavog repoa).
+    - [TODO] Zadržavanje Agentic Logova u bazi (perzistencija preko SQLite-a) kako bi preživjeli restart servera.
     - Dodavanje vizualnog prikaza "razmišljanja" (Thought process) Proactive Analysta.
 - **Faza 10: Deep IDE Integration**
     - Razvoj VS Code ekstenzije koja koristi Kronos SSE stream za proaktivne sugestije izravno u editoru.

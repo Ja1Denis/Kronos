@@ -1,0 +1,23 @@
+[package]
+name = "rust_graph"
+version = "0.7.2"
+edition = "2021"
+
+[lib]
+name = "rust_graph"
+crate-type = ["cdylib"]
+
+[dependencies]
+# PyO3 for Python bindings
+pyo3 = { version = "0.20", features = ["extension-module"] }
+
+# Rusqlite for direct SQLite access
+# Using bundled feature for easier compilation on Windows 11
+rusqlite = { version = "0.30", features = ["bundled"] }
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Link Time Optimization
+codegen-units = 1   # Better optimization
+strip = true        # Strip symbols from binary
+panic = "abort"     # Reduce binary size

@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: v0.6.2](https://img.shields.io/badge/Status-v0.6.2--Stable-orange.svg)]()
+[![Status: v0.7.3](https://img.shields.io/badge/Status-v0.7.3--Stable-orange.svg)]()
 
 Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
@@ -61,15 +61,19 @@ Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
 ---
 
-## ✨ Key Features (v0.6.1)
+## ✨ Key Features (v0.7.3)
 
 - 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage with **Hybrid Rust/Python** optimization. 
 - 🚀 **Smart Router Arhitektura**: Inteligentno prebacivanje između Python i Rust motora ovisno o težini upita.
 - ⚡ **Rust Fast-Path & Traversal (v0.6.2)**: Ultra-brza pretraga i graf traverzala u Rustu s Recursive CTE optimizacijom (**< 1ms** za entitete).
 - 🛡️ **MCP IDE Integration**: Native stdio/SSE communication for Windows agents. Includes "Zero-Pollution" stdout shielding for maximum stability.
 - 📉 **Shadow Accounting**: Built-in tracking of actual token and money savings reported in every AI response.
-- 🔍 **Hybrid Search**: Combination of Vector search (ChromaDB) and precise FTS5 keyword search (SQLite).
-- ⚖️ **Temporal Truth**: Tracks decision evolution over time (`valid_from`, `valid_to`).
+- 🔍 **Hybrid Search**: Combination of Vector search (sqlite-vec extension) and precise FTS5 keyword search (SQLite) consolidated in a single file.
+- ⚖️ **Temporal Truth & Graph**: Tracks codebase, entity and relationship evolution over time (`valid_from`, `valid_to`), enabling soft-delete and active retrieval filtering.
+- 🔄 **Self-RAG Loop (Samoispravak)**: Evaluates context sufficiency using LLM and dynamically expands/re-queries for missing details, preventing context gaps.
+- 🕒 **Asynchronous Tasks (v0.7.3)**: Call-now / fetch-later model for heavy operations like `kronos_ingest`, eliminating IDE client timeouts.
+- 📡 **SSE Streaming (v0.7.3)**: Real-time context and status updates streamed progressively via SSE during `kronos_query` execution.
+- 🏷️ **MCP Server Cards (v0.7.3)**: Standardized poslužitelj card metadata under `kronos://meta/card` to facilitate discovery in modern IDEs.
 - 📂 **Project Awareness**: Automatic knowledge isolation and filtering per project.
 - 🛠️ **Smart Fetching**: AI independently requests exact code lines only when needed.
 
@@ -113,17 +117,28 @@ In a real-world scenario (MatematikaPro project), Kronos prevented a "Senior-lev
                                           |
         ┌─────────────────────────────────┴──────────────────────────────┐
         ▼                                 ▼                              ▼
- [ Rust FastPath ]                [ SQLite (FTS5) ]            [ ChromaDB (Vector) ]
- (Literal Matches)                (Keyword Rank)               (Semantic Score)
+ [ Rust FastPath ]                [ SQLite (FTS5) ]            [ SQLite (sqlite-vec) ]
+ (Literal Matches)                (Keyword Rank)               (Semantic Match SQL)
         │                                 │                              │
         └──────────────────────────┬──────┴──────────────────────────────┘
                                    ▼
-                   [ Disk Knowledge Graph (v0.6.1) ]
+                    [ Disk Knowledge Graph (v0.7.2) ]
                                    │
                    [ Oracle (Reranking & Selection) ]
                                    │
                           [ Context Budgeter ]
 ```
+
+---
+
+## ⚖️ Temporal Knowledge Graph & Soft-Delete
+
+To prevent AI context pollution, Kronos v0.7.2 introduces a **Temporal Knowledge Graph**. When files are modified or deleted in your codebase, traditional memory graphs get cluttered with obsolete code elements and outdated relationship definitions.
+
+Kronos solves this by tracking the time-domain validity of every node (e.g. classes, functions, files) and edge (e.g. `CONTAINS`, `HAS_METHOD`, `IMPORTS`):
+- **No Hard Deletes**: Old entities are never deleted physically. Instead, their `valid_to` timestamp is set to the current time, rendering them inactive.
+- **Active Filter**: AI retrieval tools (such as BFS traversal, neighbor queries, and Recursive CTE paths in Python and Rust) automatically query only currently valid objects (`valid_to IS NULL`).
+- **Evolution Tracking**: When a class is modified (e.g. changing its docstring or adding a method), the database keeps the old version (with `valid_to` set to now) and inserts a new active version (with `valid_to = None`). This allows the memory system to maintain a complete history of the codebase evolution over time.
 
 ---
 
@@ -157,7 +172,7 @@ The server uses **OS-level stdout hijacking** (`os.dup2`) to prevent communicati
 
 ### 1. Prerequisites
 - **Python 3.10+** needed.
-- **Windows Users**: You might need [Visual Studio C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) for `chromadb`.
+- **Zero-Compile Setup**: No Microsoft Visual C++ Build Tools required! sqlite-vec runs natively out of the box.
 
 ### 2. Installation & Setup
 

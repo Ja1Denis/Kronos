@@ -8,6 +8,7 @@ load_dotenv()
 
 # Configuration
 KRONOS_LANG = os.getenv("KRONOS_LANG", "en")
+__version__ = "0.7.2"
 
 # Initialize strings based on language
 STRINGS = get_strings(KRONOS_LANG)
@@ -21,4 +22,4 @@ def reload_strings():
     STRINGS = get_strings(KRONOS_LANG)
 
 # Export for use in other modules
-__all__ = ["KRONOS_LANG", "STRINGS", "reload_strings"]
+__all__ = ["KRONOS_LANG", "STRINGS", "reload_strings", "__version__"]

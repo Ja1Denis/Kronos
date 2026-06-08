@@ -16,7 +16,7 @@ class Ingestor:
         if not os.path.exists(os.path.join(db_path, "archive.jsonl")):
             logger.warning("🚧 Kreiram novu arhivu...")
 
-    def run(self, path, project_name=None, recursive=False, silent=False):
+    def run(self, path, project_name=None, recursive=False, silent=False, progress_callback=None):
         """
         Glavna metoda za pokretanje ingestije na cijeloj putanji (folder ili file).
         """
@@ -31,23 +31,28 @@ class Ingestor:
             logger.info(f"Pokrećem Ingestora na projektu [bold cyan]{project_name}[/] (putanja: {path})")
         
         files = self._scan_files(path, recursive)
-        self.run_batch(files, project_name=project_name, silent=silent)
+        self.run_batch(files, project_name=project_name, silent=silent, progress_callback=progress_callback)
 
-    def run_batch(self, files, project_name="default", silent=False):
+    def run_batch(self, files, project_name="default", silent=False, progress_callback=None):
         """
         Obrađuje listu datoteka.
         """
         if not files:
+            if progress_callback:
+                progress_callback(100)
             return
 
         if not silent:
             logger.info(f"Ingestor obrađuje batch od {len(files)} datoteka.")
 
         processed_count = 0
+        total_files = len(files)
         for file_path in files:
             if os.path.exists(file_path):
                 self._process_file(file_path, project=project_name, silent=silent)
                 processed_count += 1
+                if progress_callback:
+                    progress_callback(int((processed_count / total_files) * 100))
             
         if not silent:
             logger.success(f"Batch završen. Obrađeno {processed_count} datoteka.")

@@ -197,15 +197,23 @@ class Worker:
             
         print(f"📂 Ingesting: {path} (Project: {project})")
         
-        # Initialize Ingestor
-        # Note: Ingestor might take time. We should ideally pass a progress callback to it.
-        # For now, we update progress to 10% started, 90% done, 100% finished.
-        self.manager.update_progress(job['id'], 10)
+        self.manager.update_progress(job['id'], 0)
         
+        def progress_cb(p: int):
+            self.manager.update_progress(job['id'], p)
+            if p % 10 == 0 or p == 100:
+                try:
+                    notification_manager.broadcast_sync("job_update", {
+                        "job_id": job['id'],
+                        "status": "running",
+                        "progress": p,
+                        "message": f"Processing ingest: {p}%"
+                    })
+                except Exception as e:
+                    print(f"⚠️ Progress notify error: {e}")
+
         ingestor = Ingestor()
-        ingestor.run(path, project_name=project, recursive=recursive, silent=True)
-        
-        self.manager.update_progress(job['id'], 90)
+        ingestor.run(path, project_name=project, recursive=recursive, silent=True, progress_callback=progress_cb)
         
         from src.modules.librarian import Librarian
         stats = Librarian().get_stats()
