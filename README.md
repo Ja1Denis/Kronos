@@ -122,7 +122,7 @@ In a real-world scenario (MatematikaPro project), Kronos prevented a "Senior-lev
         │                                 │                              │
         └──────────────────────────┬──────┴──────────────────────────────┘
                                    ▼
-                    [ Disk Knowledge Graph (v0.7.2) ]
+                    [ Disk Knowledge Graph (v0.7.3) ]
                                    │
                    [ Oracle (Reranking & Selection) ]
                                    │
@@ -133,7 +133,7 @@ In a real-world scenario (MatematikaPro project), Kronos prevented a "Senior-lev
 
 ## ⚖️ Temporal Knowledge Graph & Soft-Delete
 
-To prevent AI context pollution, Kronos v0.7.2 introduces a **Temporal Knowledge Graph**. When files are modified or deleted in your codebase, traditional memory graphs get cluttered with obsolete code elements and outdated relationship definitions.
+To prevent AI context pollution, Kronos v0.7.3 introduces a **Temporal Knowledge Graph**. When files are modified or deleted in your codebase, traditional memory graphs get cluttered with obsolete code elements and outdated relationship definitions.
 
 Kronos solves this by tracking the time-domain validity of every node (e.g. classes, functions, files) and edge (e.g. `CONTAINS`, `HAS_METHOD`, `IMPORTS`):
 - **No Hard Deletes**: Old entities are never deleted physically. Instead, their `valid_to` timestamp is set to the current time, rendering them inactive.

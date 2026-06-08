@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.7.3] - 2026-06-07
+### Added
+- **Asynchronous Ingestion**: Heavy operations like `kronos_ingest` are now processed in the background, returning a `job_id` immediately to prevent client timeouts.
+- **Query Streaming**: Real-time search phase updates and incremental chunk/entity streaming in `kronos_query` via SSE.
+- **MCP Server Card**: Standardized server metadata at `kronos://meta/card` (using `mcp-server-card.json`).
+
+### Fixed
+- **Windows UTF-8 Stability**: Forced UTF-8 stdio encoding for the MCP server on Windows to resolve emoji encoding crashes.
+
+## [v0.7.2] - 2026-06-07
+### Added
+- **Self-RAG Loop**: Evaluates context sufficiency using an LLM evaluator; automatically runs a secondary re-query if context is deemed insufficient.
+- **Self-RAG MCP Support**: Added `self_rag` parameters to `kronos_query` and `kronos_search`.
+
+### Fixed
+- **SQLite Schema Migration**: Resolved Windows migration issue when adding graph edge/node columns with non-constant defaults.
+
+## [v0.7.1] - 2026-06-06
+### Fixed
+- **Windows DB Lock**: Explicitly release the Rust engine SQLite connection reference on close to prevent DB lock issues on Windows.
+
+## [v0.7.0] - 2026-06-06
+### Added
+- **Temporal Knowledge Graph**: Tracks time-domain validity (`valid_from` and `valid_to`) of nodes and edges.
+- **Soft-Delete Ingestion**: Instead of hard-deleting elements, obsolete code elements are now marked as inactive.
+- **Active Edge Filtering**: Automated Python/Rust BFS and query filtering to query only active relationships (`valid_to IS NULL`).
+
 ## [v0.6.1] - 2026-02-17
 ### Added
 - **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage and cross-project knowledge transfer.
