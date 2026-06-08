@@ -85,22 +85,22 @@ class SkillManager:
 
     def scan_and_register_skills(self) -> List[Dict[str, Any]]:
         """
-        Skenira skill mape i registrira sve pronađene skillove u bazu i vektorski indeks.
+        Skenira cijeli radni prostor za SKILL.md datoteke (preskačući venv, node_modules, .git itd.)
+        i registrira sve pronađene skillove u bazu i vektorski indeks.
         """
         registered = []
+        exclude_dirs = {'.git', 'venv', '.venv', 'node_modules', '__pycache__', '.pytest_cache', 'backups', 'logs', 'data'}
         
-        for s_dir in self.skills_dirs:
-            if not os.path.exists(s_dir):
-                continue
+        logger.info(f"Scanning workspace root for SKILL.md files: {self.workspace_root}")
+        
+        try:
+            for root, dirs, files in os.walk(self.workspace_root):
+                # Filtriraj ignorirane direktorije na licu mjesta da os.walk ne ulazi u njih
+                dirs[:] = [d for d in dirs if d not in exclude_dirs and not d.startswith('.')]
                 
-            logger.info(f"Scanning skills directory: {s_dir}")
-            for item in os.listdir(s_dir):
-                item_path = os.path.join(s_dir, item)
-                
-                # Svaki skill bi trebao biti u svom folderu i imati SKILL.md
-                if os.path.isdir(item_path):
-                    skill_md_path = os.path.join(item_path, "SKILL.md")
-                    if os.path.exists(skill_md_path):
+                for file in files:
+                    if file.upper() == 'SKILL.MD':
+                        skill_md_path = os.path.join(root, file)
                         skill_data = self._parse_skill_md(skill_md_path)
                         if skill_data:
                             self.register_skill(
@@ -110,6 +110,8 @@ class SkillManager:
                                 parameters=skill_data["parameters"]
                             )
                             registered.append(skill_data)
+        except Exception as e:
+            logger.error(f"Error while walking workspace for skills: {e}")
                             
         return registered
 
