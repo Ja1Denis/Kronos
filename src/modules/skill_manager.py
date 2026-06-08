@@ -17,11 +17,6 @@ class SkillManager:
         self.root_dir = os.path.dirname(src_dir) # kronos
         self.workspace_root = os.path.dirname(self.root_dir) # ai-test-project
         
-        self.skills_dirs = [
-            os.path.join(self.workspace_root, "Skills"),
-            os.path.join(self.root_dir, "skills")
-        ]
-        
         # Pobrini se da tablica postoji
         self._init_db()
 
