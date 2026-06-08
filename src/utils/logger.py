@@ -33,23 +33,51 @@ class KronosLogger:
         # Ostavljamo print za CLI output, logger za debug informacije
     
     def info(self, msg):
-        print(f"{Fore.CYAN}ℹ️  {msg}{Style.RESET_ALL}")
+        try:
+            print(f"{Fore.CYAN}ℹ️  {msg}{Style.RESET_ALL}")
+        except UnicodeEncodeError:
+            try:
+                # Pokušaj ispisati barem s hrvatskim znakovima ako konzola podržava cp1252
+                print(f"{Fore.CYAN}[INFO] {msg}{Style.RESET_ALL}")
+            except UnicodeEncodeError:
+                safe_msg = msg.encode('ascii', errors='replace').decode('ascii')
+                print(f"{Fore.CYAN}[INFO] {safe_msg}{Style.RESET_ALL}")
         self.logger.info(msg)
         
     def success(self, msg):
-        print(f"{Fore.GREEN}✅ {msg}{Style.RESET_ALL}")
+        try:
+            print(f"{Fore.GREEN}✅ {msg}{Style.RESET_ALL}")
+        except UnicodeEncodeError:
+            try:
+                print(f"{Fore.GREEN}[SUCCESS] {msg}{Style.RESET_ALL}")
+            except UnicodeEncodeError:
+                safe_msg = msg.encode('ascii', errors='replace').decode('ascii')
+                print(f"{Fore.GREEN}[SUCCESS] {safe_msg}{Style.RESET_ALL}")
         self.logger.info(pass_msg := f"SUCCESS: {msg}")
 
     def warning(self, msg):
-        print(f"{Fore.YELLOW}⚠️  {msg}{Style.RESET_ALL}")
+        try:
+            print(f"{Fore.YELLOW}⚠️  {msg}{Style.RESET_ALL}")
+        except UnicodeEncodeError:
+            try:
+                print(f"{Fore.YELLOW}[WARNING] {msg}{Style.RESET_ALL}")
+            except UnicodeEncodeError:
+                safe_msg = msg.encode('ascii', errors='replace').decode('ascii')
+                print(f"{Fore.YELLOW}[WARNING] {safe_msg}{Style.RESET_ALL}")
         self.logger.warning(msg)
 
     def error(self, msg):
-        print(f"{Fore.RED}❌ {msg}{Style.RESET_ALL}")
+        try:
+            print(f"{Fore.RED}❌ {msg}{Style.RESET_ALL}")
+        except UnicodeEncodeError:
+            try:
+                print(f"{Fore.RED}[ERROR] {msg}{Style.RESET_ALL}")
+            except UnicodeEncodeError:
+                safe_msg = msg.encode('ascii', errors='replace').decode('ascii')
+                print(f"{Fore.RED}[ERROR] {safe_msg}{Style.RESET_ALL}")
         self.logger.error(msg)
         
     def debug(self, msg):
-        # Debug ispisuje samo u file, ne u konzolu (da ne smeta korisniku)
         self.logger.debug(msg)
 
 # Singleton instanca

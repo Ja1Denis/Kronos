@@ -81,6 +81,12 @@ class Oracle:
         from src.modules.librarian import Librarian
         self.librarian = Librarian()
         
+        # Skill Manager & Approval System (Faza 1)
+        from src.modules.skill_manager import SkillManager
+        from src.modules.approval import ApprovalManager
+        self.skill_manager = SkillManager(self.librarian)
+        self.approval_manager = ApprovalManager(self.librarian)
+        
         # Ostavljamo ove varijable kao None radi kompatibilnosti
         self.client = None
         self.collection = None
@@ -496,6 +502,40 @@ class Oracle:
                 self_rag_triggered = False
                 self_rag_loops = 1
                 self_rag_reason = ""
+
+                # 00. Skill matching check (Faza 1)
+                try:
+                    threshold = float(os.getenv("KRONOS_SKILL_THRESHOLD", "0.5"))
+                    matched_skill = self.skill_manager.match_skill(query, threshold=threshold)
+                    if matched_skill:
+                        logger.info(f"🎯 Query matched skill: {matched_skill['name']} (score: {matched_skill['score']:.4f})")
+                        
+                        # Create approval request
+                        req_id = self.approval_manager.create_request(matched_skill['name'], query)
+                        
+                        # Wait for approval (timeout 30 seconds)
+                        approved = self.approval_manager.wait_for_approval(req_id, timeout_sec=30)
+                        
+                        if approved:
+                            return {
+                                "status": "approved_skill",
+                                "message": f"Skill '{matched_skill['name']}' approved for query '{query}'.",
+                                "skill": matched_skill,
+                                "approval_id": req_id,
+                                "entities": [], "chunks": [], "pointers": [],
+                                "method": "Smart-Context-Engine"
+                            }
+                        else:
+                            return {
+                                "status": "rejected_skill",
+                                "message": f"Skill '{matched_skill['name']}' was rejected or timed out.",
+                                "skill": matched_skill,
+                                "approval_id": req_id,
+                                "entities": [], "chunks": [], "pointers": [],
+                                "method": "Smart-Context-Engine"
+                            }
+                except Exception as e:
+                    logger.error(f"Error in skill matching pipeline: {e}")
 
                 # 0. Fast Path (L0/L1) - High confidence exact matches
                 if self.fast_path:

@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: v0.7.3](https://img.shields.io/badge/Status-v0.7.3--Stable-orange.svg)]()
+[![Status: v0.8.0-alpha](https://img.shields.io/badge/Status-v0.8.0--alpha-blueviolet.svg)]()
 
 Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
@@ -61,8 +61,9 @@ Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
 ---
 
-## ✨ Key Features (v0.7.3)
+## ✨ Key Features (v0.8.0-alpha)
 
+- 🧠 **Smart Context Engine (Faza 1)**: Otkrivanje, semantičko podudaranje i human-in-the-loop odobrenje za izvršavanje specifičnih skillova (agenata/skripti) na temelju korisničkih upita.
 - 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage with **Hybrid Rust/Python** optimization. 
 - 🚀 **Smart Router Arhitektura**: Inteligentno prebacivanje između Python i Rust motora ovisno o težini upita.
 - ⚡ **Rust Fast-Path & Traversal (v0.6.2)**: Ultra-brza pretraga i graf traverzala u Rustu s Recursive CTE optimizacijom (**< 1ms** za entitete).

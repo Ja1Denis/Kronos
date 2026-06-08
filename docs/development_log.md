@@ -1,5 +1,15 @@
 # Development Log - Kronos
 
+### [2026-06-08] Faza 20: Smart Context Engine - Faza 1 (v0.8.0-alpha) - COMPLETED 📦🧠⚡
+- **Cilj:** Implementacija prve faze Smart Context Engine-a koji omogućuje otkrivanje, podudaranje i human-in-the-loop odobrenje za izvršavanje specifičnih skillova (agenata/skripti) na temelju korisničkih upita.
+- **Status:** ✅ Completed (Na Git grani `feat/skill-system`)
+- **Ključne promjene:**
+    - **Skill Manager (`src/modules/skill_manager.py`):** Skener koji pretražuje projekt za `SKILL.md` datoteke, čita metapodatke iz YAML frontmattera, sprema ih u bazu podataka (`registered_skills`) te generira i ažurira vektore sličnosti.
+    - **Approval Manager (`src/modules/approval.py`):** Modul koji upravlja stanjima zahtjeva za odobrenje (`pending`, `approved`, `rejected`). Sadrži metodu `wait_for_approval` s polling mehanizmom koja privremeno zaustavlja izvršavanje (npr. prevođenje ili generiranje koda) i čeka ljudsku potvrdu.
+    - **Oracle Integration (`src/modules/oracle.py`):** Inicijalna provjera korisničkog upita protiv baze registriranih skillova. Ako je sličnost iznad praga (threshold = 0.5), proces se blokira dok korisnik ne riješi zahtjev za odobrenje.
+    - **FastAPI Endpoints (`src/server.py`):** Izloženi novi REST API endpointi `/api/skills`, `/api/skills/scan`, `/api/approvals/pending` i `/api/approvals/{req_id}/resolve` za potrebe dashboarda i eksternih alata.
+    - **Unit Testovi (`tests/test_skills.py`):** Detaljni testovi za sve aspekte sustava, uključujući provjeru blokiranja u zasebnom threadu i API integraciju.
+
 ### [2026-06-07] Faza 19: MCP Tasks & Streaming (v0.7.3) - COMPLETED 📦🤖⚡
 - **Cilj:** Poboljšanje responzivnosti MCP alata uvođenjem asinkrone ingestije (Tasks) i SSE streaminga konteksta za kronos_query.
 - **Status:** ✅ Completed (Na Git grani `feat/mcp-tasks-streaming`)

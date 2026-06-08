@@ -1,5 +1,14 @@
 # Trenutni Status Projekta (Kronos)
-Datum: 2026-06-07 | Version: v0.7.3 📦🤖⚡
+Datum: 2026-06-08 | Version: v0.8.0-alpha 📦🤖⚡
+
+### 🚀 Status: Faza 20 - SMART CONTEXT ENGINE - FAZA 1 (COMPLETED ✅)
+
+### [2026-06-08] Faza 20 Postignuća:
+- **Skill Manager (`skill_manager.py`):** Kreiran modul za dinamičko skeniranje `SKILL.md` datoteka u repozitoriju. Parsira frontmatter, registrira ih u SQLite tablicu `registered_skills` i generira vektorske embeddinge za semantičko pretraživanje (pohranjene u `vec_metadata` i `vec_items`).
+- **Sustav odobrenja (`approval.py`):** Implementiran `ApprovalManager` za kreiranje i praćenje zahtjeva za odobrenje (human-in-the-loop). Podržava blokiranje izvršavanja pomoću sinkronog polling mehanizma dok korisnik ne odobri/odbije radnju.
+- **Integracija s Oracleom (`oracle.py`):** Nadograđen `Oracle` modul da prije standardne RAG pretrage provjeri podudaranje korisničkog upita sa registriranim skillovima. Ako sličnost premašuje threshold (0.5 za Gemini), upit se privremeno zaustavlja i stvara se zahtjev za odobrenje.
+- **FastAPI API Endpointi (`server.py`):** Dodane rute za upravljanje skillovima (`/api/skills`, `/api/skills/scan`) i odobrenjima (`/api/approvals/pending`, `/api/approvals/{req_id}/resolve`).
+- **Verifikacijski Testovi (`test_skills.py`):** Dodan opsežan set testova koji pokrivaju registraciju, podudaranje, blokiranje s pollingom i API rute. Svi testovi prolaze.
 
 ### 🚀 Status: Faza 19 - MCP TASKS & STREAMING (COMPLETED ✅)
 

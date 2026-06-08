@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.8.0-alpha] - 2026-06-08
+### Added
+- **Smart Context Engine (Faza 1)**: Semantičko podudaranje korisničkih upita sa registriranim skillovima te privremeno zaustavljanje izvršavanja radi korisničkog odobrenja (Human-in-the-loop).
+- **Skill Manager**: Skener `SKILL.md` datoteka koji parsira YAML frontmatter, indeksira ih u SQLite bazu i generira vektorske embeddinge.
+- **Approval System**: Mehanizam odobrenja s podrškom za sinkrono polling blokiranje niti izvršavanja dok korisnik ne riješi zahtjev.
+- **FastAPI Endpoints**: Rute za dohvat i skeniranje skillova te pregled i rješavanje (odobravanje/odbijanje) zahtjeva za odobrenje.
+- **Hard Tests**: Opsežan set testova (`test_skills_hard.py`) za provjeru rubnih slučajeva, timeouta, odbijanja i konkurentnosti.
+
+### Fixed
+- **Windows Logger Unicode Robustness**: Dodano hvatanje `UnicodeEncodeError` u logeru pri ispisu emojija na Windows konzolama koje nemaju UTF-8 podršku.
+- **Dynamic Skill Threshold**: Uvedeno čitanje praga podudaranja iz okoline (`KRONOS_SKILL_THRESHOLD`) s optimalnim defaultom od `0.5` za stabilniji Gemini matching.
+
 ## [v0.7.3] - 2026-06-07
 ### Added
 - **Asynchronous Ingestion**: Heavy operations like `kronos_ingest` are now processed in the background, returning a `job_id` immediately to prevent client timeouts.

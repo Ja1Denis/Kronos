@@ -737,6 +737,58 @@ def cancel_job(job_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== APPROVAL & SKILLS API ====================
+
+class ResolveApprovalRequest(BaseModel):
+    status: str
+
+@app.get("/api/approvals/pending")
+def get_pending_approvals():
+    """Vraća sve aktivne zahtjeve za odobrenje na čekanju."""
+    try:
+        from src.modules.approval import ApprovalManager
+        manager = ApprovalManager()
+        return {"approvals": manager.get_pending_requests()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/approvals/{req_id}/resolve")
+def resolve_approval(req_id: str, request: ResolveApprovalRequest):
+    """Odobrava ili odbija određeni zahtjev za odobrenje."""
+    try:
+        from src.modules.approval import ApprovalManager
+        manager = ApprovalManager()
+        success = manager.resolve_request(req_id, request.status)
+        if not success:
+            raise HTTPException(status_code=404, detail="Request not found or failed to resolve")
+        return {"status": "success", "message": f"Request {req_id} resolved as {request.status}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/skills/scan")
+def scan_skills():
+    """Skenira skill foldere i registrira nove vještine."""
+    try:
+        from src.modules.skill_manager import SkillManager
+        manager = SkillManager()
+        skills = manager.scan_and_register_skills()
+        return {"status": "success", "registered": skills, "count": len(skills)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/skills")
+def list_skills():
+    """Vraća popis svih registriranih vještina."""
+    try:
+        from src.modules.skill_manager import SkillManager
+        manager = SkillManager()
+        skills = manager.list_skills()
+        return {"skills": skills, "count": len(skills)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ==================== HELPER FUNKCIJE ====================
 
