@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/ja1denis-kronos-badge.png)](https://mseep.ai/app/ja1denis-kronos)
+
 # Kronos ⏳
 **Local Semantic Memory System for AI Agents**
 
