@@ -51,3 +51,5 @@ test_reranker_speed.py
 test_rust_crash.py
 test_sse_client.py
 verify_mcp_tools.py
+data/store_backup_corrupt/
+data/store_test/
