@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.9.8-alpha] - 2026-09-29
+### Added
+- **`kronos_jev_decide` — `score` tip pitanja**: ocjena na skali 2-10 razina (`score_levels` parametar). Score je vjerojatnosno težište i može pasti između razina; u odgovoru dolaze `legend` i `probabilities`. Primjena: LeadGen lead ranking, ocjena kvalitete pitcha.
+- **`kronos_jev_decide` — fan-out mod**: `questions` parametar prima dict više pitanja različitih tipova (choice/noul/score) u JEDNOM pozivu — npr. pitch QA gate (cijena, završna rečenica, URL, ton, kvaliteta) u jednom Jev pozivu umjesto pet. Uključena validacija tipova prije slanja.
+- Inspirirano disler/ten-levels-of-jev (wire contract za score: weighted position + legend + probabilities).
+- Testovi: 9 (mock) + live smoke test na OpenRouter decisions endpointu (score 0,92s; fan-out 4 pitanja 0,75s).
+### Backward compatibility
+- Stari pozivi (choice/noul s postojećim parametrima) rade neizmijenjeno; svi novi parametri su optional.
+
+---
+
+## [v0.9.7-alpha] - 2026-09-18
+### Added
+- **Inkrementalna Ingestacija (SHA-256)**: Tablica `file_hashes` prati otiske datoteka. Nepromijenjene datoteke se preskaču u milisekundi ($0.00 troška, 0 API tokena).
+- **Zastavica `--force` / `-f`**: Omogućuje forsirani re-ingest svih datoteka po želji.
+- **OpenRouter LLMClient**: Potpuna zamjena Geminija s modelom `openai/gpt-4o-mini` za Self-RAG re-query petlju.
+- **Optimizacija Baze (`kronos optimize`)**: CLI naredba za izvršavanje `PRAGMA wal_checkpoint(TRUNCATE)`, `PRAGMA optimize` i `VACUUM`.
+- **Dynamic MCP Server Card**: `kronos://meta/card` resurs dinamički reflektira `src.config.__version__`.
+
+### Fixed
+- **SQLite Concurrency Deadlock**: `store_extracted_data` zatvara SQLite transakciju prije indeksiranja entiteta, rješavajući `database is locked` greške.
+- **Windows Terminal UTF-8 Robustness**: Dodan automatski `sys.stdout.reconfigure(encoding='utf-8')` i očišćeni terminalni emojiji iz CLI naredbi.
+
+## [v0.9.0] - 2026-09-18
+### Added
+- **Jev AI Decision Engine (Faza 22)**: Integracija Jev AI (typesafe/jev-1.13) via OpenRouter za donošenje odluka, s CRAG noise filterom za filtriranje irelevantnog konteksta.
+- **kronos_jev_decide MCP Tool**: Novi MCP alat koji vanjskim agentima omogućuje delegiranje odluka Jev AI sustavu (35/35 testova).
+- **OpenRouter Embeddings**: Podrška za `text-embedding-3-large` (3072 dim) embeddinge putem OpenRoutera.
+- **Hardcore Resilience Suite**: Opsežni testovi otpornosti — adversarialni inputi, chaos network failure scenariji i live E2E (27/27 testova).
+- **Pearlman Objection Skills**: `closing-easy-yes`, `objection-no-yet`, `objection-have-website` i `price-tourism` skillovi za detekciju i obradu prigovora (Faze 2-3).
+- **CRM Closing Section**: Sekcija za zatvaranje u CRM profilu + detekcija spola interlokutora.
+
+### Changed
+- **Embedding Model Upgrade**: Prelazak na `text-embedding-004` za standardne embeddinge.
+- **LLM Migracija**: `gemini-2.0-flash` → `gemini-2.5-flash`.
+
+### Fixed
+- **SemanticCache AttributeError**: Popravljen bug u semantičkom cacheu.
+- **Test Database Isolation**: Testovi sada koriste izoliranu bazu putem `KRONOS_DATA_PATH` env varijable, bez diranja produkcijske baze.
+
 ## [v0.8.0-alpha] - 2026-06-08
 ### Added
 - **Smart Context Engine (Faza 1)**: Semantičko podudaranje korisničkih upita sa registriranim skillovima te privremeno zaustavljanje izvršavanja radi korisničkog odobrenja (Human-in-the-loop).

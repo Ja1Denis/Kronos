@@ -3,7 +3,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status: v0.8.0-alpha](https://img.shields.io/badge/Status-v0.8.0--alpha-blueviolet.svg)]()
+[![Status: v0.9.8-alpha](https://img.shields.io/badge/Status-v0.9.8--alpha-blueviolet.svg)]()
 
 Kronos is an advanced memory system that provides AI agents with long-term memory and deep project context understanding while **drastically reducing costs** through an innovative "Pointer-based" RAG approach.
 
@@ -61,22 +61,51 @@ Based on **Gemini 1.5 Flash-8B** pricing ($0.10/1M input tokens):
 
 ---
 
-## ✨ Key Features (v0.8.0-alpha)
+## ✨ Key Features (v0.9.8-alpha)
 
-- 🧠 **Smart Context Engine (Faza 1)**: Otkrivanje, semantičko podudaranje i human-in-the-loop odobrenje za izvršavanje specifičnih skillova (agenata/skripti) na temelju korisničkih upita.
-- 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage for low-RAM usage with **Hybrid Rust/Python** optimization. 
-- 🚀 **Smart Router Arhitektura**: Inteligentno prebacivanje između Python i Rust motora ovisno o težini upita.
-- ⚡ **Rust Fast-Path & Traversal (v0.6.2)**: Ultra-brza pretraga i graf traverzala u Rustu s Recursive CTE optimizacijom (**< 1ms** za entitete).
-- 🛡️ **MCP IDE Integration**: Native stdio/SSE communication for Windows agents. Includes "Zero-Pollution" stdout shielding for maximum stability.
-- 📉 **Shadow Accounting**: Built-in tracking of actual token and money savings reported in every AI response.
-- 🔍 **Hybrid Search**: Combination of Vector search (sqlite-vec extension) and precise FTS5 keyword search (SQLite) consolidated in a single file.
-- ⚖️ **Temporal Truth & Graph**: Tracks codebase, entity and relationship evolution over time (`valid_from`, `valid_to`), enabling soft-delete and active retrieval filtering.
-- 🔄 **Self-RAG Loop (Samoispravak)**: Evaluates context sufficiency using LLM and dynamically expands/re-queries for missing details, preventing context gaps.
-- 🕒 **Asynchronous Tasks (v0.7.3)**: Call-now / fetch-later model for heavy operations like `kronos_ingest`, eliminating IDE client timeouts.
-- 📡 **SSE Streaming (v0.7.3)**: Real-time context and status updates streamed progressively via SSE during `kronos_query` execution.
-- 🏷️ **MCP Server Cards (v0.7.3)**: Standardized poslužitelj card metadata under `kronos://meta/card` to facilitate discovery in modern IDEs.
-- 📂 **Project Awareness**: Automatic knowledge isolation and filtering per project.
-- 🛠️ **Smart Fetching**: AI independently requests exact code lines only when needed.
+- 🧠 **OpenRouter Embeddings (text-embedding-3-large)**: Puna semantička neovisnost o Google API-ju uz nativnu dimenziju 3072 kompatibilnu s postojećom bazom znanja.
+- ⚡ **Jev AI "System One" Decision Engine**: Ultra-brzo (~100ms) i ekstremno jeftino ($0.042/1M tokena) determinističko odlučivanje, usmjeravanje i evaluacija putem OpenRouter Decisions API-ja.
+- 🤖 **Samostalni MCP Decision Alat (`kronos_jev_decide`)**: Omogućuje vanjskim agentima (Hermes, Claude Desktop, Antigravity) da u hodu donose strukturirane odluke s vjerojatnostima.
+- 🎯 **`score` tip pitanja (NOVO v0.9.8)**: `kronos_jev_decide` sada podržava ocjenu na skali 2–10 razina (`score_levels`). Score je vjerojatnosno težište i može pasti između razina; odgovor sadrži `legend` i `probabilities`. Primjena: ranking leadova, ocjena kvalitete teksta, severity grading.
+- 🔀 **Fan-out mod (NOVO v0.9.8)**: `questions` parametar prima dict više pitanja različitih tipova (choice/noul/score) u JEDNOM pozivu — npr. QA gate s 5 provjera teksta u jednom Jev pozivu umjesto pet odvojenih. Uključena validacija tipova prije slanja. Stari pozivi (choice/noul) rade neizmijenjeno.
+- 🧠 **Smart Context Engine**: Otkrivanje, semantičko podudaranje i human-in-the-loop odobrenje skillova s **Adaptive RAG (Odlučivačem)**.
+- 🚦 **Adaptive RAG Routing**: Automatska klasifikacija upita u tri razine (SIMPLE, MODERATE, COMPLEX) i optimizirano usmjeravanje resursa.
+- 🧹 **CRAG Evaluator**: Heuristički i Jev AI "filter šuma" (Corrective RAG) koji ocjenjuje kvalitetu dohvata i odbacuje nerelevantne isječke koda prije nego dođu do LLM-a.
+- 🗜️ **Context Compression**: Rule-based sažimanje koje uklanja prazne linije, komentare i docstringove iz koda, štedeći dragocjene tokene bez gubitka logike.
+- ⚡ **Semantic Cache**: SQLite cache s definiranim TTL-om, značajno ubrzava ponovljene semantičke upite (hit-rate > 80% na sličnim pitanjima).
+- 🕸️ **Graph RAG**: Integracija skillova i entiteta u graf, omogućavajući "multi-hop" traverzale za složene arhitektonske upite.
+- 🔌 **MCP Tool Routing**: Tri specijalizirana alata (kronos_ping, kronos_reinit_oracle, kronos_query) dizajnirana za optimalnu suradnju s Antigravity agentima.
+- 📊 **Disk-Based Knowledge Graph**: SQLite-powered graph storage za nisku potrošnju RAM-a uz **Hybrid Rust/Python** optimizaciju. 
+- 🚀 **Rust Fast-Path & Traversal (v0.6.2)**: Ultra-brza pretraga i graf traverzala u Rustu s Recursive CTE optimizacijom (**< 1ms** za entitete).
+- 🛡️ **MCP IDE Integration**: Native stdio/SSE komunikacija uz "Zero-Pollution" stdout zaštitu.
+- 📉 **Shadow Accounting**: Ugrađeno praćenje uštede tokena i novca, prijavljeno u svakom AI odgovoru.
+- 🔄 **Self-RAG Loop**: Evaluira dostatnost konteksta pomoću LLM-a i dinamički proširuje upite ako nedostaju detalji.
+
+### 📐 Arhitektura v0.9.5 (Jev AI Fast Decision, Adaptive RAG & Compression)
+
+```text
+┌─────────────────┐       ┌────────────────────────┐
+│  Korisnički upit │ ────▶ │ Odlučivač (Jev AI ~100ms)│ ──▶ [ SIMPLE ] ──▶ FTS5 / Vector Cache
+└─────────────────┘       └──────────┬─────────────┘
+                                     │
+                             [ MODERATE / COMPLEX ]
+                                     ▼
+                          ┌──────────────────────┐
+                          │   Graph Traversal    │ (Multi-hop pretraga)
+                          └──────────┬───────────┘
+                                     ▼
+                          ┌──────────────────────┐
+                          │    CRAG Evaluator    │ (Odbacivanje nevažnih isječaka)
+                          └──────────┬───────────┘
+                                     ▼
+                          ┌──────────────────────┐
+                          │ Context Compression  │ (Uklanjanje šuma iz koda)
+                          └──────────┬───────────┘
+                                     ▼
+                          ┌──────────────────────┐
+                          │   Smart Fetching     │ ──▶ Odgovor AI-u
+                          └──────────────────────┘
+```
 
 ---
 
@@ -265,6 +294,44 @@ Once the server is running (via MCP in your IDE), you can simply mention `@krono
 > "@kronos How does the `Oracle` module handle context ranking?"
 
 Kronos will intercept the request, search its memory, and inject the relevant code/docs into the context *before* the LLM answers.
+
+#### 6.1 Jev Decision Tool (`kronos_jev_decide`)
+
+Ultra-fast System-1 decision maker (~0.3–1 s, fractions of a cent per call) available to any MCP-connected agent.
+
+**Single decision — `choice` (pick one option), `noul` (yes/no probability), `score` (grade on a scale, v0.9.8+):**
+```
+kronos_jev_decide(
+  instructions="Grade this sales pitch quality (0=worst, 4=best)",
+  question_type="score",
+  score_levels=["unusable", "average", "good", "very good", "top-notch"],
+  state={"pitch": "..."}
+)
+# → {"status": "success", "question_type": "score", "score": 2.03,
+#    "legend": {"0": "unusable", ..., "4": "top-notch"},
+#    "probabilities": {...}, "confidence": 0.66}
+```
+
+**Fan-out — many questions in ONE call (v0.9.8+):**
+```
+kronos_jev_decide(
+  instructions="ignored in fan-out mode",
+  state={"pitch": "..."},
+  questions={
+    "has_price":  {"type": "noul",  "instructions": "Does the pitch mention a price?",
+                   "criteria": {"true": "contains a number with currency", "false": "no price"}},
+    "ends_ok":    {"type": "noul",  "instructions": "Does it end with the exact closing question?",
+                   "criteria": {"true": "yes", "false": "no"}},
+    "quality":    {"type": "score", "instructions": "Overall pitch quality",
+                   "criteria": ["unusable", "average", "good", "very good", "top-notch"]}
+  }
+)
+# → {"status": "success", "question_type": "fan_out",
+#    "answers": {"has_price": {"noul": 0.03}, "ends_ok": {"noul": 0.92},
+#                "quality": {"score": 2.31, ...}}, "latency_ms": 614}
+```
+
+**When to use it:** bounded judgment calls (gates, classification, routing, grading) where a regex keeps breaking and a full LLM call is overkill. **Not for:** arithmetic, date math, anything requiring the model to read files or remember context — numbers and thresholds stay in your code.
 
 ### 7. Monitoring & Efficiency 📊
 Track your knowledge growth and financial savings at any time:
